@@ -4,13 +4,14 @@ const indexPath = 'play/dist/public/index.html';
 let html = fs.readFileSync(indexPath, 'utf8');
 
 const PLAY_URL = 'https://vings-workplace.vercel.app';
+const PUSHER_URL = 'https://play-production-7ae3.up.railway.app';
 const BACK_URL = 'https://back-production-76cc.up.railway.app';
 const MAP_STORAGE_URL = 'https://map-storage-production.up.railway.app';
 
 // Inject window.env config (replaces server-side Mustache {{{ script }}} block)
 const windowEnv = {
     DEBUG_MODE: false,
-    PUSHER_URL: BACK_URL,
+    PUSHER_URL: PUSHER_URL,
     FRONT_URL: PLAY_URL,
     ADMIN_URL: undefined,
     UPLOADER_URL: BACK_URL,
@@ -109,4 +110,4 @@ html = html.replace(/\{\{[^}]+\}\}/g, '');
 
 fs.writeFileSync(indexPath, html);
 console.log('index.html template variables substituted successfully.');
-console.log('PUSHER_URL set to:', BACK_URL);
+console.log('PUSHER_URL set to:', PUSHER_URL);
