@@ -1,5 +1,9 @@
 {
-    "redirects": [
-        { "source": "/(.*)", "destination": "https://play-production-7ae3.up.railway.app/$1", "permanent": false }
+    "buildCommand": "npm run proto-all --prefix messages && npm run typesafe-i18n --workspace=workadventure-play && npm run build --workspace=workadventure-play && node process-template.cjs",
+    "outputDirectory": "play/dist/public",
+    "installCommand": "HUSKY=0 npm install && npm install --prefix messages",
+    "framework": null,
+    "rewrites": [
+        { "source": "/(.*)", "destination": "/index.html" }
     ]
 }
