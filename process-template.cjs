@@ -82,10 +82,10 @@ const windowEnv = {
     ENABLE_TUTORIAL: false,
 };
 
-const scriptTag = `<script>window.env = ${JSON.stringify(windowEnv)};</script>`;
+const windowEnvJs = `window.env = ${JSON.stringify(windowEnv)};`;
 
-// Replace the triple-stash {{{ script }}} block with window.env injection
-html = html.replace(/\{\{\{[^}]*script[^}]*\}\}\}/g, scriptTag);
+// Replace the triple-stash {{{ script }}} block with window.env JS (the template already has <script> wrapper)
+html = html.replace(/\{\{\{[^}]*script[^}]*\}\}\}/g, windowEnvJs);
 
 // Set meta variables
 html = html.replace(/\{\{ title \}\}/g, 'WorkAdventure - Vings Workplace');
