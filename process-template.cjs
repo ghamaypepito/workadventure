@@ -20,7 +20,7 @@ const windowEnv = {
     DISABLE_NOTIFICATIONS: false,
     JITSI_URL: undefined,
     JITSI_PRIVATE_MODE: false,
-    ENABLE_MAP_EDITOR: false,
+    ENABLE_MAP_EDITOR: true,
     PUBLIC_MAP_STORAGE_PREFIX: MAP_STORAGE_URL,
     MAX_USERNAME_LENGTH: 16,
     MAX_PER_GROUP: 4,
