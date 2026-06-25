@@ -1,4 +1,5 @@
 import fs from "fs";
+import http from "http";
 import type { Application } from "express";
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -42,6 +43,7 @@ class App {
     private readonly app: Application;
     private readonly websocketApp: uWebsockets.TemplatedApp;
     private readonly prometheusWebserver: Application | undefined;
+    private httpPort: number = 3001;
 
     constructor() {
         this.websocketApp = uWebsockets.App();
@@ -92,6 +94,47 @@ class App {
 
         // Socket controllers
         new IoSocketController(this.websocketApp);
+
+        // Proxy all HTTP requests from uWebSockets to Express (for single-port Railway deployments)
+        // uWebSockets handles WebSocket on its port; Express handles HTTP on a separate internal port.
+        // This any() handler forwards non-WebSocket HTTP requests to Express.
+        this.websocketApp.any("/*", (res, req) => {
+            res.onAborted(() => {
+                // ignore
+            });
+            const url = req.getUrl();
+            const query = req.getQuery();
+            const method = req.getMethod().toUpperCase();
+            const headers: Record<string, string> = {};
+            req.forEach((key: string, value: string) => {
+                headers[key] = value;
+            });
+            let body = Buffer.alloc(0);
+            res.onData((chunk: ArrayBuffer, isLast: boolean) => {
+                body = Buffer.concat([body, Buffer.from(chunk)]);
+                if (isLast) {
+                    const options: http.RequestOptions = {
+                        hostname: "127.0.0.1",
+                        port: this.httpPort,
+                        path: url + (query ? "?" + query : ""),
+                        method,
+                        headers,
+                    };
+                    const proxyReq = http.request(options, (proxyRes) => {
+                        res.writeStatus(String(proxyRes.statusCode ?? 200));
+                        for (const [k, v] of Object.entries(proxyRes.headers)) {
+                            if (v !== undefined) res.writeHeader(k, Array.isArray(v) ? v.join(", ") : v);
+                        }
+                        const chunks: Buffer[] = [];
+                        proxyRes.on("data", (c: Buffer) => chunks.push(c));
+                        proxyRes.on("end", () => res.end(Buffer.concat(chunks)));
+                    });
+                    proxyReq.on("error", () => res.writeStatus("502").end("Bad Gateway"));
+                    if (body.length > 0) proxyReq.write(body);
+                    proxyReq.end();
+                }
+            });
+        });
 
         // Http controllers
         new AuthenticateController(this.app);
@@ -206,6 +249,7 @@ class App {
     }
 
     public listenWebServer(port: number): Promise<void> {
+        this.httpPort = port;
         return new Promise((resolve, reject) => {
             this.app.listen(port, (err) => {
                 if (err) {
