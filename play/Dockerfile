@@ -38,7 +38,8 @@ RUN export NODE_OPTIONS="$NODE_OPTIONS" && \
 FROM node:24-trixie-slim
 EXPOSE 3000
 WORKDIR /usr/src
-RUN apt-get update && apt-get install -y git curl
+# Install nginx for WebSocket+HTTP routing on a single port
+RUN apt-get update && apt-get install -y git curl nginx && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 COPY play/package.json play/package.json
 COPY play/packages/iframe-api-typings/package.json play/packages/iframe-api-typings/package.json
@@ -50,14 +51,39 @@ COPY libs/store-utils/package.json libs/store-utils/package.json
 COPY libs/shared-utils/package.json libs/shared-utils/package.json
 ENV NODE_ENV=production
 ENV UWS_HTTP_MAX_HEADERS_SIZE=16384
+# Express on 3002, uWebSockets on 3001, nginx fronts both on 3000
+ENV PUSHER_HTTP_PORT=3002
 RUN npm ci --omit=dev --workspace workadventure-play
 COPY --from=builder /usr/src/libs /usr/src/libs
 COPY --from=builder --chown=node:node /usr/src/play /usr/src/play
 # useful for profiling (with --prof) because it write a file in current directory
 RUN chown -R node:node /usr/src/play
+
+# nginx config: WebSocket (/ws/) → uWebSockets on 3001, HTTP → Express on 3002
+RUN printf 'server {\n\
+    listen 3000;\n\
+    location /ws/ {\n\
+        proxy_pass http://127.0.0.1:3001;\n\
+        proxy_http_version 1.1;\n\
+        proxy_set_header Upgrade $http_upgrade;\n\
+        proxy_set_header Connection "Upgrade";\n\
+        proxy_set_header Host $host;\n\
+        proxy_read_timeout 86400;\n\
+    }\n\
+    location / {\n\
+        proxy_pass http://127.0.0.1:3002;\n\
+        proxy_set_header Host $host;\n\
+        proxy_set_header X-Real-IP $remote_addr;\n\
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n\
+        proxy_set_header X-Forwarded-Proto $scheme;\n\
+    }\n\
+}\n' > /etc/nginx/conf.d/play.conf && \
+    rm -f /etc/nginx/sites-enabled/default && \
+    printf '#!/bin/sh\nnginx\nexec npm run start\n' > /usr/local/bin/start.sh && \
+    chmod +x /usr/local/bin/start.sh
+
 WORKDIR /usr/src/play
 
-HEALTHCHECK --interval=10s --timeout=7s --start-period=10s --retries=15 CMD curl -f http://localhost:3000/ping || exit 1
+HEALTHCHECK --interval=10s --timeout=7s --start-period=15s --retries=15 CMD curl -f http://localhost:3000/ping || exit 1
 
-USER node
-CMD ["npm", "run", "start"]
+CMD ["/usr/local/bin/start.sh"]

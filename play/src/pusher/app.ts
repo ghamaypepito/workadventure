@@ -1,6 +1,4 @@
 import fs from "fs";
-import net from "net";
-import http from "http";
 import type { Application } from "express";
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -44,7 +42,6 @@ class App {
     private readonly app: Application;
     private readonly websocketApp: uWebsockets.TemplatedApp;
     private readonly prometheusWebserver: Application | undefined;
-    private wsPort: number = 3001;
 
     constructor() {
         this.websocketApp = uWebsockets.App();
@@ -210,25 +207,7 @@ class App {
 
     public listenWebServer(port: number): Promise<void> {
         return new Promise((resolve, reject) => {
-            const httpServer = http.createServer(this.app);
-            // Forward WebSocket upgrade requests from Express to the uWebSockets server on wsPort
-            httpServer.on("upgrade", (req, socket, head) => {
-                const wsProxy = net.createConnection(this.wsPort, "127.0.0.1");
-                wsProxy.on("error", () => socket.destroy());
-                socket.on("error", () => wsProxy.destroy());
-                wsProxy.on("connect", () => {
-                    // Reconstruct the raw HTTP upgrade request for uWebSockets
-                    const reqLine = `${req.method ?? "GET"} ${req.url} HTTP/1.1\r\n`;
-                    const headerLines = Object.entries(req.headers)
-                        .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
-                        .join("\r\n");
-                    wsProxy.write(reqLine + headerLines + "\r\n\r\n");
-                    if (head && head.length > 0) wsProxy.write(head);
-                    socket.pipe(wsProxy);
-                    wsProxy.pipe(socket);
-                });
-            });
-            httpServer.listen(port, (err?: Error) => {
+            this.app.listen(port, (err) => {
                 if (err) {
                     reject(err);
                     return;
@@ -239,7 +218,6 @@ class App {
     }
 
     public listenWebSocket(port: number): Promise<void> {
-        this.wsPort = port;
         return new Promise((resolve, reject) => {
             this.websocketApp.listen(port, (token) => {
                 if (token) {
