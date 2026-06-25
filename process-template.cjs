@@ -82,9 +82,11 @@ const windowEnv = {
     ENABLE_TUTORIAL: false,
 };
 
-const windowEnvJs = `window.env = ${JSON.stringify(windowEnv)};`;
+// The play service injects both window.env and window.capabilities into the same <script> block.
+// On Vercel (static SPA), we must bake both in. window.capabilities = {} mirrors no-admin-API behavior.
+const windowEnvJs = `window.env = ${JSON.stringify(windowEnv)};\nwindow.capabilities = {};`;
 
-// Replace the triple-stash {{{ script }}} block with window.env JS (the template already has <script> wrapper)
+// Replace the triple-stash {{{ script }}} block (the template already has a <script> wrapper)
 html = html.replace(/\{\{\{[^}]*script[^}]*\}\}\}/g, windowEnvJs);
 
 // Set meta variables
