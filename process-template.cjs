@@ -76,7 +76,7 @@ const windowEnv = {
     DEFAULT_WOKA_NAME: undefined,
     DEFAULT_WOKA_TEXTURE: undefined,
     SKIP_CAMERA_PAGE: false,
-    BYPASS_PWA: false,
+    BYPASS_PWA: true,
     PROVIDE_DEFAULT_WOKA_NAME: undefined,
     PROVIDE_DEFAULT_WOKA_TEXTURE: undefined,
     ENABLE_TUTORIAL: false,
