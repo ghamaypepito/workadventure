@@ -110,6 +110,17 @@ html = html.replace(/\{\{#googleDrivePickerClientId\}\}[\s\S]*?\{\{\/googleDrive
 html = html.replace(/\{\{\{[^}]+\}\}\}/g, '');
 html = html.replace(/\{\{[^}]+\}\}/g, '');
 
+// Inject a script that unregisters all service workers immediately on load.
+// Without a backend to manage cache manifests, the SW update loop fires on every deploy.
+const swUnregisterScript = `<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function(regs) {
+    regs.forEach(function(r) { r.unregister(); });
+  });
+}
+</script>`;
+html = html.replace('</head>', swUnregisterScript + '</head>');
+
 fs.writeFileSync(indexPath, html);
 console.log('index.html template variables substituted successfully.');
 console.log('PUSHER_URL set to:', PUSHER_URL);
