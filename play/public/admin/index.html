@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vings Workplace — Admin</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f172a; color: #e2e8f0; font-family: system-ui, sans-serif; min-height: 100vh; padding: 2rem; }
+  h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+  .subtitle { color: #94a3b8; margin-bottom: 2rem; }
+  .section { max-width: 700px; margin: 0 auto 2.5rem auto; }
+  .section h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #a5b4fc; }
+  .row { display: flex; align-items: center; justify-content: space-between; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 0.5rem; }
+  .row .info { display: flex; flex-direction: column; }
+  .row .name { font-weight: 600; }
+  .row .email { color: #94a3b8; font-size: 0.85rem; }
+  .row .actions { display: flex; gap: 0.5rem; }
+  button { border: none; border-radius: 6px; padding: 0.4rem 0.8rem; font-weight: 600; cursor: pointer; font-size: 0.85rem; }
+  .approve { background: #16a34a; color: white; }
+  .deny { background: #dc2626; color: white; }
+  .promote { background: #4338ca; color: white; }
+  .empty { color: #64748b; font-style: italic; padding: 0.5rem 0; }
+  .error { color: #f87171; margin-top: 1rem; }
+  input[type="email"] { background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 0.5rem; color: white; margin-right: 0.5rem; width: 260px; }
+</style>
+</head>
+<body>
+<h1>🔐 Admin Dashboard</h1>
+<p class="subtitle">Manage who can access this workplace</p>
+
+<div class="section">
+  <h2>Pending requests</h2>
+  <div id="pending-list"><div class="empty">Loading…</div></div>
+</div>
+
+<div class="section">
+  <h2>Approved users</h2>
+  <div id="approved-list"><div class="empty">Loading…</div></div>
+</div>
+
+<div class="section">
+  <h2>Admins</h2>
+  <div id="admins-list"><div class="empty">Loading…</div></div>
+  <div style="margin-top: 1rem;">
+    <input type="email" id="promote-email" placeholder="email@example.com">
+    <button class="promote" onclick="promote()">Make admin</button>
+  </div>
+</div>
+
+<div id="error" class="error"></div>
+
+<script>
+async function api(path, options) {
+  const res = await fetch(path, { credentials: 'same-origin', ...options });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || ('Request failed: ' + res.status));
+  }
+  return res.json();
+}
+
+function showError(err) {
+  document.getElementById('error').textContent = err.message;
+}
+
+async function load() {
+  try {
+    const data = await api('/api/admin/pending');
+
+    const pendingEl = document.getElementById('pending-list');
+    pendingEl.innerHTML = data.pending.length === 0
+      ? '<div class="empty">No pending requests</div>'
+      : data.pending.map(p => `
+        <div class="row">
+          <div class="info">
+            <div class="name">${escapeHtml(p.name)}</div>
+            <div class="email">${escapeHtml(p.email)} · ${escapeHtml(p.provider)}</div>
+          </div>
+          <div class="actions">
+            <button class="approve" onclick="approve('${escapeAttr(p.email)}')">Approve</button>
+            <button class="deny" onclick="deny('${escapeAttr(p.email)}')">Deny</button>
+          </div>
+        </div>
+      `).join('');
+
+    const approvedEl = document.getElementById('approved-list');
+    approvedEl.innerHTML = data.approved.length === 0
+      ? '<div class="empty">No approved users yet</div>'
+      : data.approved.map(email => `
+        <div class="row">
+          <div class="info"><div class="email">${escapeHtml(email)}</div></div>
+          <div class="actions">
+            <button class="promote" onclick="promoteEmail('${escapeAttr(email)}')">Make admin</button>
+          </div>
+        </div>
+      `).join('');
+
+    const adminsEl = document.getElementById('admins-list');
+    adminsEl.innerHTML = data.admins.length === 0
+      ? '<div class="empty">No admins yet</div>'
+      : data.admins.map(email => `<div class="row"><div class="info"><div class="email">${escapeHtml(email)}</div></div></div>`).join('');
+  } catch (err) {
+    showError(err);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(s) {
+  return String(s).replace(/'/g, "\\'");
+}
+
+async function approve(email) {
+  try {
+    await api('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+    load();
+  } catch (err) { showError(err); }
+}
+async function deny(email) {
+  try {
+    await api('/api/admin/deny', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+    load();
+  } catch (err) { showError(err); }
+}
+async function promoteEmail(email) {
+  try {
+    await api('/api/admin/promote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+    load();
+  } catch (err) { showError(err); }
+}
+function promote() {
+  const email = document.getElementById('promote-email').value.trim();
+  if (!email) return;
+  promoteEmail(email);
+  document.getElementById('promote-email').value = '';
+}
+
+load();
+</script>
+</body>
+</html>

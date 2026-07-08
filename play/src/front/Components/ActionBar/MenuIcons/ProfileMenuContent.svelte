@@ -35,7 +35,7 @@
     import Companion from "../../Companion/Companion.svelte";
     import ExternalComponents from "../../ExternalModules/ExternalComponents.svelte";
     import CamSettingsIcon from "../../Icons/CamSettingsIcon.svelte";
-    import { IconBug, IconFileDownload, IconHelpCircle, IconLogout } from "../../Icons";
+    import { IconBug, IconDoorExit, IconFileDownload, IconHelpCircle, IconLogout, IconMapEditor } from "../../Icons";
     import ProfilIcon from "../../Icons/ProfilIcon.svelte";
     import SettingsIcon from "../../Icons/SettingsIcon.svelte";
     import Woka from "../../Woka/WokaFromUserId.svelte";
@@ -146,6 +146,18 @@
         openedMenuStore.close("profileMenu");
         gameManager.leaveGame(PwaInstallSceneName, new PwaInstallScene());
     }
+
+    function leaveMap(): void {
+        openedMenuStore.close("profileMenu");
+        window.location.href = "/maps/index.html";
+    }
+
+    function openMapEditorLink(): void {
+        openedMenuStore.close("profileMenu");
+        window.location.href = "https://play-production-7ae3.up.railway.app/~/starter/map.wam";
+    }
+
+    const isAdminUser = typeof window !== "undefined" && (window as unknown as { __waIsAdmin?: boolean }).__waIsAdmin === true;
 </script>
 
 <div class="bg-contrast/80 backdrop-blur rounded-md p-1 w-56 text-white select-none" data-testid="profile-menu">
@@ -249,6 +261,32 @@
             </div>
             <div class="text-start leading-4 text-white flex items-center">
                 {$LL.menu.profile.helpAndTips()}
+            </div>
+        </button>
+
+        {#if isAdminUser}
+            <button
+                onclick={openMapEditorLink}
+                data-testid="profile-menu-map-editor"
+                class="group flex p-2 gap-2 items-center hover:bg-white/10 transition-all cursor-pointer font-bold text-sm w-full pointer-events-auto text-start rounded"
+            >
+                <div class="transition-all w-6 h-6 aspect-square text-center flex items-center justify-center">
+                    <IconMapEditor height="20" width="20" class="text-white" />
+                </div>
+                <div class="text-start leading-4 text-white flex items-center">Map Editor</div>
+            </button>
+        {/if}
+
+        <button
+            onclick={leaveMap}
+            data-testid="profile-menu-leave-map"
+            class="group flex p-2 gap-2 items-center hover:bg-danger-600 transition-all cursor-pointer font-bold text-sm w-full pointer-events-auto text-start rounded"
+        >
+            <div class="transition-all w-6 h-6 aspect-square text-center flex items-center justify-center">
+                <IconDoorExit height="20" width="20" class="text-danger-800 group-hover:text-white" />
+            </div>
+            <div class="text-start leading-4 text-danger-800 group-hover:text-white flex items-center">
+                Leave the map
             </div>
         </button>
 

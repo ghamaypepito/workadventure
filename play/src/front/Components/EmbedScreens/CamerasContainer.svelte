@@ -171,10 +171,9 @@
                 const countForTileSizing = pipVerticalGrid
                     ? Math.min(PIP_GRID_MAX_VIDEOS, pipSortWindowCount)
                     : oneLineCount;
-                const currentVideoWidth = Math.max(
-                    Math.min(maxMediaBoxWidth, containerWidth / countForTileSizing),
-                    minMediaBoxWidth,
-                );
+                const currentVideoWidth =
+                    Math.max(Math.min(maxMediaBoxWidth, containerWidth / countForTileSizing), minMediaBoxWidth) *
+                    0.95;
                 videoWidth = currentVideoWidth;
                 videoHeight = undefined;
                 if (pipVerticalGrid) {
@@ -183,7 +182,7 @@
                     maxVisibleVideosStore.set(Math.ceil(containerWidth / currentVideoWidth));
                 }
             } else {
-                const currentVideoWidth = containerWidth;
+                const currentVideoWidth = containerWidth * 0.95;
                 const currentVideoHeight = currentVideoWidth * (9 / 16);
                 videoWidth = currentVideoWidth;
                 videoHeight = currentVideoHeight;
@@ -195,8 +194,8 @@
             }
         } else {
             const layout = calculateOptimalLayout(containerWidth, containerHeight);
-            videoWidth = layout.videoWidth;
-            videoHeight = layout.videoHeight;
+            videoWidth = layout.videoWidth * 0.95;
+            videoHeight = layout.videoHeight !== undefined ? layout.videoHeight * 0.95 : undefined;
         }
     });
 
@@ -550,8 +549,8 @@
 
                 // We need to recalculate the layout to take into account the new container width
                 const layout = calculateOptimalLayout(containerWidth, containerHeight);
-                videoWidth = layout.videoWidth;
-                videoHeight = layout.videoHeight;
+                videoWidth = layout.videoWidth * 0.95;
+                videoHeight = layout.videoHeight !== undefined ? layout.videoHeight * 0.95 : undefined;
             }}
             dataTestid="resize-handle"
         />
