@@ -104,6 +104,11 @@ export class Room {
             //eslint-disable-next-line no-await-in-loop
             const result = await room.getMapDetail();
             if (result instanceof MapDetail) {
+                if (redirectCount > 0 && window.location.href !== roomUrl.toString()) {
+                    // Reflect the resolved room URL in the address bar (e.g. the root domain
+                    // redirecting to the default map) without triggering a full page reload.
+                    window.history.replaceState(null, "", roomUrl.toString());
+                }
                 return room;
             }
             redirectCount++;
