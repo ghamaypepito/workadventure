@@ -1851,6 +1851,10 @@ export class GameScene extends DirtyScene {
                 this.load.image(`${url}/${tileset.image}`, `${url}/${tileset.image}`);
             }
         });
+        // The loader may already be idle by the time we reach here (e.g. when switching to a
+        // custom map mid-session), in which case the queued tileset images above would never
+        // actually fire. Explicitly (re)start the loader so they do.
+        this.load.start();
 
         // Scan the object layers for objects to load and load them.
         this.objectsByType = new Map<string, ITiledMapObject[]>();
