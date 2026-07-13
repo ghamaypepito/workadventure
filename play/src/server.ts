@@ -18,6 +18,7 @@ import {
     PUSHER_WS_PORT,
 } from "./pusher/enums/EnvironmentVariable";
 import RoomApiServer from "./room-api/RoomApiServer";
+import { startPathProxy } from "./pusher/pathProxy";
 
 // In production, the current working directory is "dist".
 if (fs.existsSync("dist") && !fs.existsSync("src")) {
@@ -60,6 +61,16 @@ if (SENTRY_DSN != undefined) {
             .then(() => console.info(`WorkAdventure Pusher web-socket server started on port ${PUSHER_WS_PORT}!`)),
         app.listenPrometheusPort(),
     ]);
+
+    // Single-port PaaS providers (e.g. Railway) can only proxy one public port per service, but the
+    // HTTP server and the WebSocket game server listen on two different ports internally (see
+    // docker-compose.single-domain.yaml, which normally splits these via a Traefik "/ws/" path rule).
+    // PUBLIC_PORT lets us recreate that split with an in-process proxy when there's no such reverse
+    // proxy in front of us.
+    const publicPort = process.env.PUBLIC_PORT ? parseInt(process.env.PUBLIC_PORT) : undefined;
+    if (publicPort) {
+        startPathProxy(publicPort, PUSHER_HTTP_PORT, PUSHER_WS_PORT);
+    }
 })().catch((e) => {
     console.error(e);
     Sentry.captureException(e);
