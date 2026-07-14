@@ -23,9 +23,9 @@ async function available(req, res, user) {
 async function claim(req, res, user) {
     let body = '';
     for await (const chunk of req) body += chunk;
-    let areaId;
+    let areaId, playerUuid;
     try {
-        ({ areaId } = JSON.parse(body || '{}'));
+        ({ areaId, playerUuid } = JSON.parse(body || '{}'));
     } catch {
         res.statusCode = 400;
         res.end(JSON.stringify({ error: 'Invalid JSON body' }));
@@ -34,6 +34,11 @@ async function claim(req, res, user) {
     if (!areaId) {
         res.statusCode = 400;
         res.end(JSON.stringify({ error: 'Missing areaId' }));
+        return;
+    }
+    if (!playerUuid) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing playerUuid' }));
         return;
     }
 
@@ -57,11 +62,15 @@ async function claim(req, res, user) {
         return;
     }
 
+    // ownerId must be the WorkAdventure player UUID (WA.player.uuid), not our session email:
+    // that's what the native "is this my desk" check in AreasPropertiesListener compares against
+    // (localUserStore.getLocalUser()?.uuid). The session (user.email) is only used above to gate
+    // who's allowed to claim a seat at all.
     await patchWam([
         {
             op: 'replace',
             path: `/areas/${areaIndex}/properties/${propIndex}/ownerId`,
-            value: user.email,
+            value: playerUuid,
         },
     ]);
 

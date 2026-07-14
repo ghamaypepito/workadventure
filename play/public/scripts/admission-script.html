@@ -116,6 +116,12 @@
         // Offer them the seat picker so they can choose where to sit.
         await offerSeatPicker();
 
+        // Let them reopen the seat picker anytime from the menu, not just once at join
+        // (e.g. if they skipped it, or want to switch desks later).
+        WA.ui.registerMenuCommand('Choose my seat', () => {
+            offerSeatPicker().catch((e) => console.error('[admission] seat picker error', e));
+        });
+
         // Recognized users also watch for guests waiting to be let in.
         pollPendingAdmissions();
     });

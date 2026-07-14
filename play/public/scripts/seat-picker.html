@@ -68,7 +68,7 @@
             const res = await fetch('/api/seats/claim', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ areaId: seat.id }),
+                body: JSON.stringify({ areaId: seat.id, playerUuid: WA.player.uuid }),
             });
             const data = await res.json();
             if (!res.ok) {
