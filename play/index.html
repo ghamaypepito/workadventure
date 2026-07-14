@@ -222,10 +222,16 @@
         <input type="hidden" id="matrixLoginToken" value="{{ matrixLoginToken }}" name="matrixLoginToken">
         <div id="app"></div>
         <!--
-            Static, dependency-free loading screen shown immediately on first paint, before the
-            JS bundle has downloaded/parsed/mounted the real app. Without this, users see nothing
-            but the plain navy background for however long that takes. Removed automatically as
-            soon as the Svelte app mounts content into #app.
+            Static, dependency-free loading screen shown immediately on first paint, before the JS
+            bundle has downloaded/parsed/mounted the real app. Without this, users see nothing but
+            the plain navy background for however long that takes.
+
+            This covers the FIRST gap (before Svelte mounts). There's a SECOND gap after the
+            onboarding screens (name/character/camera) are dismissed but before Phaser's own canvas
+            starts rendering its "WorkAdventure" splash/progress bar -- since that's drawn on
+            <canvas>, not in the DOM, we can't detect its content directly, only the canvas
+            element's existence. A small corner badge (not a full overlay, so it doesn't hide the
+            onboarding UI) covers that gap too, removed once a <canvas> shows up.
         -->
         <div id="static-loading-screen" style="
             position: fixed; inset: 0; z-index: 99999;
@@ -240,29 +246,76 @@
             "></div>
             <div style="font-size: 1rem; opacity: 0.85;">Loading WorkAdventure&hellip;</div>
         </div>
+        <div id="static-loading-badge" style="
+            display: none;
+            position: fixed; bottom: 20px; left: 20px; z-index: 99999;
+            align-items: center; gap: 10px;
+            background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(4px);
+            color: #fff; padding: 10px 16px; border-radius: 999px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 0.85rem; box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        ">
+            <div style="
+                width: 16px; height: 16px; flex-shrink: 0;
+                border: 2.5px solid rgba(255,255,255,0.25); border-top-color: #fff;
+                border-radius: 50%; animation: static-loading-spin 0.8s linear infinite;
+            "></div>
+            <span>Loading room&hellip;</span>
+        </div>
         <style>
             @keyframes static-loading-spin { to { transform: rotate(360deg); } }
         </style>
         <script>
             (function () {
                 var appEl = document.getElementById('app');
-                var loaderEl = document.getElementById('static-loading-screen');
-                function removeLoader() {
-                    if (loaderEl && loaderEl.parentNode) loaderEl.parentNode.removeChild(loaderEl);
+                var fullLoaderEl = document.getElementById('static-loading-screen');
+                var badgeEl = document.getElementById('static-loading-badge');
+
+                function removeFullLoader() {
+                    if (fullLoaderEl && fullLoaderEl.parentNode) fullLoaderEl.parentNode.removeChild(fullLoaderEl);
                 }
-                if (appEl.childNodes.length > 0) {
-                    removeLoader();
-                    return;
+                function showBadge() {
+                    if (!document.querySelector('canvas')) badgeEl.style.display = 'flex';
                 }
-                var observer = new MutationObserver(function () {
-                    if (appEl.childNodes.length > 0) {
-                        observer.disconnect();
-                        removeLoader();
+                function removeBadge() {
+                    if (badgeEl && badgeEl.parentNode) badgeEl.parentNode.removeChild(badgeEl);
+                }
+
+                function afterSvelteMounted() {
+                    removeFullLoader();
+                    showBadge();
+
+                    if (document.querySelector('canvas')) {
+                        removeBadge();
+                        return;
                     }
-                });
-                observer.observe(appEl, { childList: true });
-                // Safety net in case mounting happens in a way the observer misses.
-                setTimeout(removeLoader, 30000);
+                    var canvasObserver = new MutationObserver(function () {
+                        if (document.querySelector('canvas')) {
+                            canvasObserver.disconnect();
+                            removeBadge();
+                        }
+                    });
+                    canvasObserver.observe(document.body, { childList: true, subtree: true });
+                    // Safety net in case the canvas appears in a way the observer misses.
+                    setTimeout(removeBadge, 60000);
+                }
+
+                if (appEl.childNodes.length > 0) {
+                    afterSvelteMounted();
+                } else {
+                    var mountObserver = new MutationObserver(function () {
+                        if (appEl.childNodes.length > 0) {
+                            mountObserver.disconnect();
+                            afterSvelteMounted();
+                        }
+                    });
+                    mountObserver.observe(appEl, { childList: true });
+                    // Safety net in case mounting happens in a way the observer misses.
+                    setTimeout(function () {
+                        mountObserver.disconnect();
+                        afterSvelteMounted();
+                    }, 30000);
+                }
             })();
         </script>
         <script type="module" src="/src/svelte.ts"></script>
