@@ -5,6 +5,7 @@ const { REDIS_URL } = require('../_lib/admin');
 
 const PENDING_KEY = 'wa:pending-admission';
 const MAX_AGE_MS = 10 * 60 * 1000; // ignore stale requests older than 10 minutes
+const CHAT_HISTORY_MAX = 200; // messages kept per room
 
 async function readBody(req) {
     let body = '';
@@ -130,6 +131,65 @@ async function approve(req, res) {
     res.end(JSON.stringify({ success: true }));
 }
 
+// Requires a signed-in (non-guest) user: only real users' messages are persisted, and only
+// real users can read history back (guests never see or contribute to saved history).
+async function chatHistoryGet(req, res) {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const room = url.searchParams.get('room');
+    if (!room) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing room' }));
+        return;
+    }
+
+    const raw = await withRedis(REDIS_URL, async (client) => {
+        return client.command('LRANGE', `wa:chat:${room}`, '0', String(CHAT_HISTORY_MAX - 1));
+    });
+
+    const messages = (raw || [])
+        .map((entry) => {
+            try {
+                return JSON.parse(entry);
+            } catch {
+                return null;
+            }
+        })
+        .filter(Boolean)
+        .reverse();
+
+    res.statusCode = 200;
+    res.end(JSON.stringify({ messages }));
+}
+
+async function chatHistoryPost(req, res) {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const parsed = await readBody(req);
+    if (parsed === null || !parsed.room || !parsed.message) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing room or message' }));
+        return;
+    }
+
+    const entry = JSON.stringify({
+        author: parsed.author || user.name || user.email,
+        message: String(parsed.message).slice(0, 4000),
+        ts: Date.now(),
+    });
+
+    await withRedis(REDIS_URL, async (client) => {
+        await client.command('LPUSH', `wa:chat:${parsed.room}`, entry);
+        await client.command('LTRIM', `wa:chat:${parsed.room}`, '0', String(CHAT_HISTORY_MAX - 1));
+    });
+
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true }));
+}
+
 module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
 
@@ -148,6 +208,9 @@ module.exports = async (req, res) => {
             await pending(req, res);
         } else if (segment === 'approve') {
             await approve(req, res);
+        } else if (segment === 'chat-history') {
+            if (req.method === 'POST') await chatHistoryPost(req, res);
+            else await chatHistoryGet(req, res);
         } else {
             res.statusCode = 404;
             res.end(JSON.stringify({ error: 'Not found' }));

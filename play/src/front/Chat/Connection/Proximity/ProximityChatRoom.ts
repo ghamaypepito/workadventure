@@ -37,6 +37,7 @@ import { isAChatRoomIsVisible, navChat, shouldRestoreChatStateStore } from "../.
 import { roomSidePanelStore } from "../../Stores/RoomSidePanelStore";
 import { selectedRoomStore } from "../../Stores/SelectRoomStore";
 import { mapExtendedSpaceUserToChatUser } from "../../UserProvider/ChatUserMapper";
+import { loadChatHistory, persistChatMessage } from "./chatPersistence";
 import { gameManager } from "../../../Phaser/Game/GameManager";
 import { availabilityStatusStore, requestedCameraState, requestedMicrophoneState } from "../../../Stores/MediaStore";
 import { localUserStore } from "../../../Connection/LocalUserStore";
@@ -130,6 +131,7 @@ export class ProximityChatRoom implements ChatRoom {
     pictureStore = readable(undefined);
     avatarFallbackColor = readable(undefined);
     messages: SearchableArrayStore<string, ChatMessage> = new SearchableArrayStore((item) => item.id);
+    private historyLoadedForRooms = new Set<string>();
     /** Space users of the current space (forwarded from _space.usersStore on join, empty map on leave). */
     public readonly spaceUsersStore = new ForwardableStore<Map<string, SpaceUserExtended>>(new Map());
     private readonly spaceMetadataStore = writable<Map<string, unknown>>(new Map());
@@ -329,6 +331,11 @@ export class ProximityChatRoom implements ChatRoom {
             });
         }
 
+        // Persist real chat messages (not synthetic join/leave notices) for signed-in users only.
+        if (action === "proximity" && broadcast) {
+            persistChatMessage(this.spaceName, chatUser.username ?? this.unknownUserName, message);
+        }
+
         if (action === "proximity") {
             // Send local message to WorkAdventure scripting API
             try {
@@ -336,6 +343,28 @@ export class ProximityChatRoom implements ChatRoom {
             } catch (e) {
                 console.error("Error while sending message to WorkAdventure scripting API", e);
             }
+        }
+    }
+
+    private async loadPersistedHistory(room: string): Promise<void> {
+        if (this.historyLoadedForRooms.has(room)) return;
+        this.historyLoadedForRooms.add(room);
+
+        const history = await loadChatHistory(room);
+        for (const entry of history) {
+            const content = { body: entry.message, url: undefined };
+            const historyMessage = new ProximityChatMessage(
+                uuidv4(),
+                { ...this.unknownUser, username: entry.author },
+                writable(content),
+                new Date(entry.ts),
+                true,
+                "proximity",
+            );
+            this.messages.push(historyMessage);
+        }
+        if (history.length > 0) {
+            this.hasUserMessages.set(true);
         }
     }
 
@@ -967,6 +996,10 @@ export class ProximityChatRoom implements ChatRoom {
         this.isJoined.set(true);
 
         await this.throwIfAborted(joinSignal, spaceForThisJoin);
+
+        this.loadPersistedHistory(spaceName).catch((e) =>
+            console.error("Error loading persisted chat history", e),
+        );
 
         let hasUserInProximityChat = false;
 
