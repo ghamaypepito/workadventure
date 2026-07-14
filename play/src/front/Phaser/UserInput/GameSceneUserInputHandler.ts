@@ -24,6 +24,15 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private controlKeyisPressed: boolean = false;
     public shortcuts: Shortcut[] = [];
 
+    // Left-click-drag pans the camera to look around the map (right-click/tap already does
+    // click-to-walk, so this doesn't conflict). A small distance threshold keeps a quick left
+    // click free to behave as before (e.g. for UI/game-object interactions).
+    private isDraggingCamera = false;
+    private dragLastX = 0;
+    private dragLastY = 0;
+    private dragTotalDistance = 0;
+    private static readonly DRAG_THRESHOLD_PX = 6;
+
     constructor(gameScene: GameScene) {
         this.gameScene = gameScene;
 
@@ -108,6 +117,15 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     }
 
     public handlePointerUpEvent(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): void {
+        if (this.isDraggingCamera) {
+            const wasActualDrag = this.dragTotalDistance > GameSceneUserInputHandler.DRAG_THRESHOLD_PX;
+            this.isDraggingCamera = false;
+            this.dragTotalDistance = 0;
+            if (wasActualDrag) {
+                return;
+            }
+        }
+
         if (pointer.wasTouch || pointer.leftButtonReleased()) {
             for (const object of gameObjects) {
                 if (isActivatable(object)) {
@@ -153,9 +171,28 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             });
     }
 
-    public handlePointerDownEvent(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): void {}
+    public handlePointerDownEvent(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): void {
+        if (!pointer.wasTouch && pointer.leftButtonDown()) {
+            this.isDraggingCamera = true;
+            this.dragLastX = pointer.x;
+            this.dragLastY = pointer.y;
+            this.dragTotalDistance = 0;
+        }
+    }
 
-    public handlePointerMoveEvent(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): void {}
+    public handlePointerMoveEvent(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): void {
+        if (!this.isDraggingCamera || !pointer.leftButtonDown()) {
+            return;
+        }
+        const dx = pointer.x - this.dragLastX;
+        const dy = pointer.y - this.dragLastY;
+        this.dragLastX = pointer.x;
+        this.dragLastY = pointer.y;
+        this.dragTotalDistance += Math.abs(dx) + Math.abs(dy);
+        if (this.dragTotalDistance > GameSceneUserInputHandler.DRAG_THRESHOLD_PX) {
+            this.gameScene.getCameraManager().dragBy(dx, dy);
+        }
+    }
 
     private handleKeyF() {
         const state = get(followStateStore);

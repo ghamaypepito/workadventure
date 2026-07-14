@@ -3956,6 +3956,10 @@ ${escapedMessage}
     }
 
     private handleCurrentPlayerHasMovedEvent(event: HasPlayerMovedInterface): void {
+        // If the camera was dragged away to look around, snap it back to following the player
+        // now that they've actually moved.
+        this.cameraManager.resumeFollowingPlayerIfDragged();
+
         //listen event to share position of user
         this.pushPlayerPosition(event);
         this.gameMapFrontWrapper.setPosition(event.x, event.y);

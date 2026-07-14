@@ -93,6 +93,10 @@ export class CameraManager extends Phaser.Events.EventEmitter {
     // Target follow offset for the camera, expressed in game pixels.
     private targetFollowOffset: { x: number; y: number } | undefined;
 
+    // Set while the user is click-and-dragging the map to look around. Once true, camera following
+    // stays off until the player actually moves again (see resumeFollowingPlayerIfDragged).
+    private draggedAwayFromPlayer = false;
+
     constructor(
         private scene: GameScene,
         private mapSize: { width: number; height: number },
@@ -297,6 +301,32 @@ export class CameraManager extends Phaser.Events.EventEmitter {
 
         if (sendViewportUpdate) {
             this.scene.sendViewportToServer();
+        }
+    }
+
+    /**
+     * Pans the camera by a screen-space delta (e.g. from a mouse/touch drag), converting to world
+     * units via the current zoom level. Stops following the player, since Phaser's camera.startFollow
+     * would otherwise override any manual scroll change on the next frame.
+     */
+    public dragBy(deltaScreenX: number, deltaScreenY: number): void {
+        if (!this.draggedAwayFromPlayer) {
+            this.camera.stopFollow();
+            this.draggedAwayFromPlayer = true;
+        }
+        this.camera.scrollX -= deltaScreenX / this.camera.zoom;
+        this.camera.scrollY -= deltaScreenY / this.camera.zoom;
+        this.scene.markDirty();
+    }
+
+    /**
+     * Called whenever the current player actually moves (WASD/joystick/click-to-walk). If the camera
+     * was previously dragged away, this snaps it back to following the player.
+     */
+    public resumeFollowingPlayerIfDragged(): void {
+        if (this.draggedAwayFromPlayer && this.playerToFollow) {
+            this.draggedAwayFromPlayer = false;
+            this.startFollowPlayer(this.playerToFollow, 300);
         }
     }
 

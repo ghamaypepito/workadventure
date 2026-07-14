@@ -124,7 +124,7 @@
         <ChatActionMenu
             {searchActive}
             hasCloseChat={$hideActionBarStoreBecauseOfChatBar}
-            hasSearch={$chatStatusStore !== "OFFLINE" && !isInSpecificDiscussion}
+            hasSearch={($navChat.key === "users" || $chatStatusStore !== "OFFLINE") && !isInSpecificDiscussion}
             matrixChatConnection={hasMatrixChatCapabilities(chat) ? chat : undefined}
             onToggleSearch={handleToggleSearch}
         />
