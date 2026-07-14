@@ -130,7 +130,7 @@
         />
     </div>
     <!-- searchbar -->
-    {#if searchActive && $chatStatusStore !== "OFFLINE"}
+    {#if searchActive && ($navChat.key === "users" || $chatStatusStore !== "OFFLINE")}
         {#await userProviderMergerPromise}
             <div></div>
         {:then userProviderMerger}
