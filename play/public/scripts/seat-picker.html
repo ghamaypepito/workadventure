@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Choose your seat</title>
+<script src="https://office.connectiumai.com/iframe_api.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0f172a; color: #e2e8f0; font-family: system-ui, sans-serif; padding: 1.25rem; }
+  h1 { font-size: 1.1rem; margin: 0 0 0.25rem; }
+  p.subtitle { color: #94a3b8; font-size: 0.85rem; margin: 0 0 1rem; }
+  .seat-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 80vh; overflow-y: auto; }
+  .seat-btn { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 0.75rem 1rem; color: inherit; text-align: left; cursor: pointer; font-size: 0.9rem; transition: border-color 0.15s; }
+  .seat-btn:hover { border-color: #6366f1; }
+  .seat-btn:disabled { opacity: 0.5; cursor: default; }
+  .status { margin-top: 1rem; font-size: 0.85rem; color: #94a3b8; }
+  .error { color: #f87171; }
+  .empty { color: #94a3b8; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<h1>Choose your seat</h1>
+<p class="subtitle">Pick a desk or table seat to sit at. You can change this later by claiming a different seat in-game.</p>
+<div id="list" class="seat-list"><div class="empty">Loading available seats&hellip;</div></div>
+<div id="status" class="status"></div>
+<button id="skipBtn" class="seat-btn" style="margin-top:1rem;width:100%;text-align:center;">Skip for now</button>
+
+<script>
+(function () {
+    const listEl = document.getElementById('list');
+    const statusEl = document.getElementById('status');
+
+    async function loadSeats() {
+        try {
+            const res = await fetch('/api/seats/available');
+            if (!res.ok) {
+                throw new Error('Could not load seats (are you signed in?)');
+            }
+            const { seats } = await res.json();
+            renderSeats(seats);
+        } catch (e) {
+            listEl.innerHTML = '';
+            statusEl.textContent = e.message;
+            statusEl.classList.add('error');
+        }
+    }
+
+    function renderSeats(seats) {
+        if (seats.length === 0) {
+            listEl.innerHTML = '<div class="empty">No free seats right now — you can still walk around and claim one later.</div>';
+            return;
+        }
+        listEl.innerHTML = '';
+        for (const seat of seats) {
+            const btn = document.createElement('button');
+            btn.className = 'seat-btn';
+            btn.textContent = seat.name;
+            btn.addEventListener('click', () => claimSeat(seat, btn));
+            listEl.appendChild(btn);
+        }
+    }
+
+    async function claimSeat(seat, btn) {
+        listEl.querySelectorAll('button').forEach((b) => (b.disabled = true));
+        statusEl.textContent = 'Claiming ' + seat.name + '…';
+        statusEl.classList.remove('error');
+        try {
+            const res = await fetch('/api/seats/claim', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ areaId: seat.id }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || 'That seat was just taken — pick another.');
+            }
+            await WA.player.teleport(data.x, data.y);
+            await WA.nav.closeCoWebSite();
+        } catch (e) {
+            statusEl.textContent = e.message;
+            statusEl.classList.add('error');
+            listEl.querySelectorAll('button').forEach((b) => (b.disabled = false));
+        }
+    }
+
+    document.getElementById('skipBtn').addEventListener('click', () => {
+        WA.nav.closeCoWebSite();
+    });
+
+    WA.onInit().then(loadSeats);
+})();
+</script>
+</body>
+</html>

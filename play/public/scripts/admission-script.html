@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="https://office.connectiumai.com/iframe_api.js"></script>
+</head>
+<body>
+<script>
+(function () {
+    function getCookie(name) {
+        const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+        return match ? decodeURIComponent(match[1]) : null;
+    }
+
+    function getUser() {
+        const raw = getCookie('wa_user');
+        if (!raw) return null;
+        try {
+            return JSON.parse(raw);
+        } catch {
+            return null;
+        }
+    }
+
+    async function waitForApproval(name) {
+        WA.controls.disablePlayerControls();
+
+        const reqRes = await fetch('/api/admission/request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+        });
+        const { requestId } = await reqRes.json();
+
+        const popup = WA.ui.openPopup(
+            'admissionWaitingPopup',
+            "Welcome! Someone from the office needs to let you in.\nPlease wait, you'll be let in shortly.",
+            [],
+        );
+
+        const poll = async () => {
+            try {
+                const statusRes = await fetch('/api/admission/status?requestId=' + encodeURIComponent(requestId));
+                const { status } = await statusRes.json();
+                if (status === 'approved') {
+                    popup.close();
+                    WA.controls.restorePlayerControls();
+                    return;
+                }
+            } catch (e) {
+                console.error('[admission] poll error', e);
+            }
+            setTimeout(poll, 3000);
+        };
+        setTimeout(poll, 3000);
+    }
+
+    async function offerSeatPicker() {
+        await WA.nav.openCoWebSite('/scripts/seat-picker.html', true, undefined, 40, 0, true);
+    }
+
+    async function pollPendingAdmissions() {
+        let currentBanner = null;
+        const check = async () => {
+            try {
+                const res = await fetch('/api/admission/pending');
+                if (res.ok) {
+                    const { requests } = await res.json();
+                    if (requests.length > 0 && !currentBanner) {
+                        const first = requests[0];
+                        currentBanner = WA.ui.openPopup(
+                            'admissionPendingPopup',
+                            (first.name || 'Someone') + ' wants to join the office.',
+                            [
+                                {
+                                    label: 'Let them in',
+                                    className: 'success',
+                                    callback: async () => {
+                                        await fetch('/api/admission/approve', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ requestId: first.requestId }),
+                                        });
+                                        if (currentBanner) {
+                                            currentBanner.close();
+                                            currentBanner = null;
+                                        }
+                                    },
+                                },
+                            ],
+                        );
+                    } else if (requests.length === 0 && currentBanner) {
+                        currentBanner.close();
+                        currentBanner = null;
+                    }
+                }
+            } catch (e) {
+                console.error('[admission] pending poll error', e);
+            }
+            setTimeout(check, 5000);
+        };
+        check();
+    }
+
+    WA.onInit().then(async () => {
+        const user = getUser();
+
+        if (!user) {
+            // Guest: no SSO session at all. Hold them until someone admits them.
+            const name = await WA.player.name;
+            await waitForApproval(name);
+            return;
+        }
+
+        // Recognized (non-guest) user: enters immediately, no wait.
+        // Offer them the seat picker so they can choose where to sit.
+        await offerSeatPicker();
+
+        // Recognized users also watch for guests waiting to be let in.
+        pollPendingAdmissions();
+    });
+})();
+</script>
+</body>
+</html>
