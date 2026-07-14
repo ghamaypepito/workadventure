@@ -1,5 +1,7 @@
+const crypto = require('crypto');
 const { signSession, parseCookies, baseUrl } = require('../_lib/session');
 const { getAccessStatus, addPendingRequest } = require('../_lib/admin');
+const { setActiveSession } = require('../_lib/sessionRegistry');
 
 module.exports = async (req, res) => {
     const url = new URL(req.url, baseUrl(req));
@@ -50,11 +52,17 @@ module.exports = async (req, res) => {
             await addPendingRequest(email, name, 'microsoft');
         }
 
+        // Only one active session per email: this login supersedes any other device/browser
+        // already signed in with the same email.
+        const sessionId = crypto.randomBytes(16).toString('hex');
+        await setActiveSession(email, sessionId);
+
         const session = signSession({
             provider: 'microsoft',
             email,
             name,
             status,
+            sessionId,
             exp: Date.now() + 1000 * 60 * 60 * 24 * 7,
         });
 

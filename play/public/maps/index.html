@@ -64,6 +64,16 @@
         }
       } catch (e) {}
     }
+    // Confirm this browser's session hasn't been superseded by a login elsewhere with the
+    // same email; if it has, the server clears the cookies and we reload to reflect that.
+    fetch('/api/auth/session-status', { credentials: 'same-origin' })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.authenticated && userCookie) {
+          window.location.reload();
+        }
+      })
+      .catch(() => {});
   })();
 </script>
 </body>
