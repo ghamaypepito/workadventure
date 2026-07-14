@@ -133,7 +133,11 @@ async function approve(req, res) {
 module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
 
-    const segment = Array.isArray(req.query.admissionPath) ? req.query.admissionPath[0] : req.query.admissionPath;
+    // Read the sub-path directly from the URL rather than req.query: Vercel's catch-all
+    // query key comes through as the literal bracket syntax (e.g. "...admissionPath"),
+    // not the clean param name, so parsing the pathname ourselves is more robust.
+    const pathname = new URL(req.url, `http://${req.headers.host}`).pathname;
+    const segment = pathname.split('/').filter(Boolean).pop();
 
     try {
         if (segment === 'request') {
@@ -146,7 +150,7 @@ module.exports = async (req, res) => {
             await approve(req, res);
         } else {
             res.statusCode = 404;
-            res.end(JSON.stringify({ error: 'Not found', debugQuery: req.query, debugUrl: req.url, debugSegment: segment }));
+            res.end(JSON.stringify({ error: 'Not found' }));
         }
     } catch (err) {
         res.statusCode = 500;

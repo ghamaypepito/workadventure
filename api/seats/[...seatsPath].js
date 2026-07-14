@@ -78,7 +78,11 @@ async function claim(req, res, user) {
 module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
 
-    const segment = Array.isArray(req.query.seatsPath) ? req.query.seatsPath[0] : req.query.seatsPath;
+    // Read the sub-path directly from the URL rather than req.query: Vercel's catch-all
+    // query key comes through as the literal bracket syntax (e.g. "...seatsPath"), not the
+    // clean param name, so parsing the pathname ourselves is more robust.
+    const pathname = new URL(req.url, `http://${req.headers.host}`).pathname;
+    const segment = pathname.split('/').filter(Boolean).pop();
 
     const user = await requireUser(req, res);
     if (!user) return;
