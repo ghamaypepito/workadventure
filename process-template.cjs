@@ -44,7 +44,7 @@ const windowEnv = {
     SENTRY_ENVIRONMENT: undefined,
     SENTRY_RELEASE: undefined,
     SENTRY_TRACES_SAMPLE_RATE: undefined,
-    WOKA_SPEED: 3,
+    WOKA_SPEED: 30,
     FEATURE_FLAG_BROADCAST_AREAS: true,
     KLAXOON_ENABLED: false,
     KLAXOON_CLIENT_ID: undefined,
