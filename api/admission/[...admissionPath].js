@@ -146,7 +146,7 @@ module.exports = async (req, res) => {
             await approve(req, res);
         } else {
             res.statusCode = 404;
-            res.end(JSON.stringify({ error: 'Not found' }));
+            res.end(JSON.stringify({ error: 'Not found', debugQuery: req.query, debugUrl: req.url, debugSegment: segment }));
         }
     } catch (err) {
         res.statusCode = 500;
