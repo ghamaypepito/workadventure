@@ -78,7 +78,7 @@ async function claim(req, res, user) {
 module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
 
-    const segment = Array.isArray(req.query.path) ? req.query.path[0] : req.query.path;
+    const segment = Array.isArray(req.query.seatsPath) ? req.query.seatsPath[0] : req.query.seatsPath;
 
     const user = await requireUser(req, res);
     if (!user) return;

@@ -133,7 +133,7 @@ async function approve(req, res) {
 module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
 
-    const segment = Array.isArray(req.query.path) ? req.query.path[0] : req.query.path;
+    const segment = Array.isArray(req.query.admissionPath) ? req.query.admissionPath[0] : req.query.admissionPath;
 
     try {
         if (segment === 'request') {
