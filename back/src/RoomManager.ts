@@ -203,6 +203,14 @@ const roomManager = {
                             );
                             break;
                         }
+                        case "socialPingRequestMessage": {
+                            socketManager.handleSocialPingRequestMessage(
+                                room,
+                                user,
+                                message.message.socialPingRequestMessage,
+                            );
+                            break;
+                        }
                         case "publicEvent":
                         case "privateEvent": {
                             throw new Error("Cannot reach here, this is handled by the space manager");

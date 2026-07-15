@@ -10,6 +10,7 @@ import { gameManager } from "../../Phaser/Game/GameManager";
 import MeetingInvitationDeclinedToast from "../../Components/MeetingInvitation/MeetingInvitationDeclinedToast.svelte";
 import MeetingInvitationAcceptedToast from "../../Components/MeetingInvitation/MeetingInvitationAcceptToast.svelte";
 import MeetingInvitationLimitToast from "../../Components/MeetingInvitation/MeetingInvitationLimitToast.svelte";
+import PingReceivedToast from "../../Components/SocialSignal/PingReceivedToast.svelte";
 
 const MEETING_INVITATION_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const MEETING_INVITATION_MAX_REQUESTS = 50;
@@ -89,6 +90,24 @@ export class InviteManager {
                 }
             }),
         );
+
+        // Show a toast + soft chime when a Ping (bell) is received. Delivered over the persistent
+        // connection to a specific user by uuid, independent of proximity space membership - see
+        // RemotePlayer.ts for why this can't just piggyback on the proximity broadcast channel like Wave.
+        this.subscriptions.push(
+            this.connection.socialPingRequestReceivedStream.subscribe((payload) => {
+                const toastId = `social-signal-ping-${Date.now()}`;
+                toastStore.addToast(
+                    PingReceivedToast,
+                    { actorName: payload.senderName, toastUuid: toastId },
+                    toastId,
+                );
+                const scene = gameManager.getCurrentGameScene();
+                if (scene) {
+                    scene.playSound("ping-bell", 0.15);
+                }
+            }),
+        );
     }
 
     public handleAccept(request: MeetingInvitationRequestReceivedMessage): void {
@@ -135,6 +154,37 @@ export class InviteManager {
         }
 
         this.connection.emitMeetingInvitationRequest(receiverUserUuid, receiverUserId);
+        return true;
+    }
+
+    /**
+     * Sends a Ping (bell) to a Busy/Do Not Disturb user by uuid, over the persistent connection
+     * (independent of proximity space membership). Shares the same server-side antispam limits
+     * as meeting invitations (max 50 requests/10min, max 3 to the same user/10min).
+     * @returns true if the request was sent, false if blocked by limits
+     */
+    public requestPing(receiverUserUuid: string, receiverUserId?: number): boolean {
+        const isAdmin = this.connection.isAdmin();
+
+        if (!isAdmin) {
+            const now = Date.now();
+            const cutoff = now - MEETING_INVITATION_WINDOW_MS;
+            this.inviteRequestLog = this.inviteRequestLog.filter((e) => e.at > cutoff);
+
+            if (this.inviteRequestLog.length >= MEETING_INVITATION_MAX_REQUESTS) {
+                this.showLimitReachedToast();
+                return false;
+            }
+            const toSameUser = this.inviteRequestLog.filter((e) => e.receiverUserUuid === receiverUserUuid).length;
+            if (toSameUser >= MEETING_INVITATION_MAX_PER_USER) {
+                this.showLimitReachedToast();
+                return false;
+            }
+
+            this.inviteRequestLog.push({ at: now, receiverUserUuid });
+        }
+
+        this.connection.emitSocialPingRequest(receiverUserUuid, receiverUserId);
         return true;
     }
 

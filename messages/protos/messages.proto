@@ -432,6 +432,7 @@ message ClientToServerMessage {
     MeetingInvitationResponseMessage meetingInvitationResponseMessage = 49;
     SetAreaPropertyVariableMessage setAreaPropertyVariableMessage = 46;
     VideoQualityReportMessage videoQualityReportMessage = 50;
+    SocialPingRequestMessage socialPingRequestMessage = 51;
   }
 }
 
@@ -1133,6 +1134,23 @@ message MeetingInvitationResponseMessage {
   string requestSenderUserUuid = 2;
 }
 
+/**
+ * Sent by a user to "ping" (bell) another user by uuid, independent of any shared proximity
+ * space membership - used to reach a user whose status is Busy/Do Not Disturb, since that
+ * status change itself tears down their current proximity group/space.
+ */
+message SocialPingRequestMessage {
+  string receiverUserUuid = 1;
+  optional int32 receiverUserId = 2;
+}
+
+/** Sent by the server to the target of a SocialPingRequestMessage. */
+message SocialPingRequestReceivedMessage {
+  string senderUserUuid = 1;
+  string senderName = 2;
+  optional int32 senderUserId = 3;
+}
+
 /** Sent by the server to the requester when the invitee has accepted or declined. */
 message MeetingInvitationResponseReceivedMessage {
   bool accepted = 1;
@@ -1365,6 +1383,7 @@ message ServerToClientMessage {
     MeetingInvitationRequestClosedMessage meetingInvitationRequestClosedMessage = 40;
     DuplicateUserConnectedMessage duplicateUserConnectedMessage = 41;
     BackConnectionCloseReasonMessage backConnectionCloseReasonMessage = 42;
+    SocialPingRequestReceivedMessage socialPingRequestReceivedMessage = 43;
   }
 }
 

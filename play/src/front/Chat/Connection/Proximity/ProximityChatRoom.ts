@@ -38,11 +38,9 @@ import { roomSidePanelStore } from "../../Stores/RoomSidePanelStore";
 import { selectedRoomStore } from "../../Stores/SelectRoomStore";
 import { mapExtendedSpaceUserToChatUser } from "../../UserProvider/ChatUserMapper";
 import { loadChatHistory, persistChatMessage } from "./chatPersistence";
-import { canSendPing, decodeSocialSignal, encodeSocialSignal, recordPingSent } from "./socialSignal";
+import { decodeSocialSignal, encodeSocialSignal } from "./socialSignal";
 import { toastStore } from "../../../Stores/ToastStoreSingleton";
 import WaveReceivedToast from "../../../Components/SocialSignal/WaveReceivedToast.svelte";
-import PingReceivedToast from "../../../Components/SocialSignal/PingReceivedToast.svelte";
-import PingCooldownToast from "../../../Components/SocialSignal/PingCooldownToast.svelte";
 import { gameManager } from "../../../Phaser/Game/GameManager";
 import { availabilityStatusStore, requestedCameraState, requestedMicrophoneState } from "../../../Stores/MediaStore";
 import { localUserStore } from "../../../Connection/LocalUserStore";
@@ -377,7 +375,12 @@ export class ProximityChatRoom implements ChatRoom {
         return this.users?.get(this._spaceUserId)?.uuid;
     }
 
-    /** Sends a Wave to a specific user, visible to them alone as a toast + a line in this chat's history. */
+    /**
+     * Sends a Wave to a specific user, visible to them alone as a toast + a line in this chat's history.
+     * Note: this rides on the proximity space's broadcast channel, which is fine for Wave (both users
+     * are actively together when this is used) but NOT suitable for Ping - see RemotePlayer.ts / InviteManager
+     * for why Ping uses a dedicated UUID-targeted backend message instead.
+     */
     sendWave(targetUuid: string, actorName: string): void {
         this._space?.emitPublicMessage({
             $case: "spaceMessage",
@@ -385,38 +388,15 @@ export class ProximityChatRoom implements ChatRoom {
         });
     }
 
-    /**
-     * Sends a Ping (bell) to a specific user who is currently Busy/Do Not Disturb.
-     * Returns false if blocked by the per-recipient cooldown.
-     */
-    sendPing(targetUuid: string, actorName: string): boolean {
-        if (!canSendPing(targetUuid)) {
-            const toastId = `ping-cooldown-${Date.now()}`;
-            toastStore.addToast(PingCooldownToast, { actorName, toastUuid: toastId }, toastId);
-            return false;
-        }
-        recordPingSent(targetUuid);
-        this._space?.emitPublicMessage({
-            $case: "spaceMessage",
-            spaceMessage: { message: encodeSocialSignal({ kind: "ping", targetUuid, actorName }), characterTextures: [], name: actorName },
-        });
-        return true;
-    }
-
     private handleIncomingSocialSignal(signal: ReturnType<typeof decodeSocialSignal>, actorName: string): void {
         if (!signal || signal.targetUuid !== this.myUuid()) return;
 
-        const toastId = `social-signal-${signal.kind}-${Date.now()}`;
-        if (signal.kind === "wave") {
-            toastStore.addToast(WaveReceivedToast, { actorName, toastUuid: toastId }, toastId);
-            gameManager.getCurrentGameScene().playSound("wave", 0.15);
-            const text = get(LL).chat.socialSignal.wavedToYou({ name: actorName });
-            this.sendMessage(text, "incoming", false);
-            persistChatMessage(this.spaceName, actorName, text);
-        } else {
-            toastStore.addToast(PingReceivedToast, { actorName, toastUuid: toastId }, toastId);
-            gameManager.getCurrentGameScene().playSound("ping-bell", 0.15);
-        }
+        const toastId = `social-signal-wave-${Date.now()}`;
+        toastStore.addToast(WaveReceivedToast, { actorName, toastUuid: toastId }, toastId);
+        gameManager.getCurrentGameScene().playSound("wave", 0.15);
+        const text = get(LL).chat.socialSignal.wavedToYou({ name: actorName });
+        this.sendMessage(text, "incoming", false);
+        persistChatMessage(this.spaceName, actorName, text);
     }
 
     private addEnteringChatWithUsers(users: SpaceUserExtended[]) {

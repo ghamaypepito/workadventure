@@ -305,12 +305,10 @@ export class RemotePlayer extends Character implements ActivatableInterface {
                 priority: 4,
                 style: "bg-white/10 hover:bg-white/30",
                 callback: () => {
-                    try {
-                        const room = this.scene.proximityChatRoomManager.getDefaultRoom();
-                        room?.sendPing(this.userUuid, this.scene.CurrentPlayer.playerName);
-                    } catch (error) {
-                        Sentry.captureException(error);
-                    }
+                    // Uses the dedicated UUID-targeted backend message (not the proximity space
+                    // broadcast channel Wave uses) because going Busy/DND itself tears down the
+                    // recipient's proximity space membership server-side.
+                    this.scene.inviteManager?.requestPing(this.userUuid, this.userId);
                 },
                 actionIcon: IconBellRinging,
             });

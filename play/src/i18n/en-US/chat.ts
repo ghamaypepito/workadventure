@@ -49,7 +49,6 @@ const chat: BaseTranslation = {
         ping: "Ping",
         wavedToYou: "{name} waved to you",
         wantsToTalk: "{name} wants to talk to you",
-        pingCooldown: "Please wait a bit before pinging {name} again.",
     },
     imagePreview: {
         close: "Close",
