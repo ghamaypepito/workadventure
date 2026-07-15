@@ -42,6 +42,7 @@ import { canSendPing, decodeSocialSignal, encodeSocialSignal, recordPingSent } f
 import { toastStore } from "../../../Stores/ToastStoreSingleton";
 import WaveReceivedToast from "../../../Components/SocialSignal/WaveReceivedToast.svelte";
 import PingReceivedToast from "../../../Components/SocialSignal/PingReceivedToast.svelte";
+import PingCooldownToast from "../../../Components/SocialSignal/PingCooldownToast.svelte";
 import { gameManager } from "../../../Phaser/Game/GameManager";
 import { availabilityStatusStore, requestedCameraState, requestedMicrophoneState } from "../../../Stores/MediaStore";
 import { localUserStore } from "../../../Connection/LocalUserStore";
@@ -389,7 +390,11 @@ export class ProximityChatRoom implements ChatRoom {
      * Returns false if blocked by the per-recipient cooldown.
      */
     sendPing(targetUuid: string, actorName: string): boolean {
-        if (!canSendPing(targetUuid)) return false;
+        if (!canSendPing(targetUuid)) {
+            const toastId = `ping-cooldown-${Date.now()}`;
+            toastStore.addToast(PingCooldownToast, { actorName, toastUuid: toastId }, toastId);
+            return false;
+        }
         recordPingSent(targetUuid);
         this._space?.emitPublicMessage({
             $case: "spaceMessage",
