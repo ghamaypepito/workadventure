@@ -394,7 +394,15 @@ export class ProximityChatRoom implements ChatRoom {
         const toastId = `social-signal-wave-${Date.now()}`;
         toastStore.addToast(WaveReceivedToast, { actorName, toastUuid: toastId }, toastId);
         gameManager.getCurrentGameScene().playSound("wave", 0.15);
-        const text = get(LL).chat.socialSignal.wavedToYou({ name: actorName });
+        this.logSystemMessage(get(LL).chat.socialSignal.wavedToYou({ name: actorName }), actorName);
+    }
+
+    /**
+     * Adds a system-style line (e.g. "X waved to you", "X pinged you") to this chat's timeline and,
+     * for non-guests, persists it into chat history - without broadcasting it (the event that
+     * triggered it, e.g. a Wave/Ping, was already delivered over its own channel).
+     */
+    public logSystemMessage(text: string, actorName: string): void {
         this.sendMessage(text, "incoming", false);
         persistChatMessage(this.spaceName, actorName, text);
     }

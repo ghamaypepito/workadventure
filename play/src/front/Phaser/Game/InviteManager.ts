@@ -11,6 +11,7 @@ import MeetingInvitationDeclinedToast from "../../Components/MeetingInvitation/M
 import MeetingInvitationAcceptedToast from "../../Components/MeetingInvitation/MeetingInvitationAcceptToast.svelte";
 import MeetingInvitationLimitToast from "../../Components/MeetingInvitation/MeetingInvitationLimitToast.svelte";
 import PingReceivedToast from "../../Components/SocialSignal/PingReceivedToast.svelte";
+import LL from "../../../i18n/i18n-svelte";
 
 const MEETING_INVITATION_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const MEETING_INVITATION_MAX_REQUESTS = 50;
@@ -105,6 +106,16 @@ export class InviteManager {
                 const scene = gameManager.getCurrentGameScene();
                 if (scene) {
                     scene.playSound("ping-bell", 0.15);
+                    try {
+                        scene.proximityChatRoomManager
+                            .getDefaultRoom()
+                            ?.logSystemMessage(
+                                get(LL).chat.socialSignal.pingedYou({ name: payload.senderName }),
+                                payload.senderName,
+                            );
+                    } catch (error) {
+                        console.error("Failed to log ping to chat history:", error);
+                    }
                 }
             }),
         );
