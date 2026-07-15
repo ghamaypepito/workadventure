@@ -49,6 +49,8 @@ export { default as IconUnMute } from "~icons/tabler/volume";
 export { default as IconMute } from "~icons/tabler/volume3";
 export { default as IconRestore } from "~icons/tabler/restore";
 export { default as IconBellOff } from "~icons/tabler/bell-off";
+export { default as IconBellRinging } from "~icons/tabler/bell-ringing";
+export { default as IconHandStop } from "~icons/tabler/hand-stop";
 export { default as IconSearch } from "~icons/tabler/search";
 export { default as IconMailBox } from "~icons/tabler/mailbox";
 export { default as IconExclamation } from "~icons/tabler/message-2-exclamation";

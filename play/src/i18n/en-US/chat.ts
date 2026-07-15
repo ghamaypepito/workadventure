@@ -44,6 +44,13 @@ const chat: BaseTranslation = {
         defaultResponderName: "The user",
         limitReached: "You have sent too many meeting invitations. Please try again later.",
     },
+    socialSignal: {
+        wave: "Wave",
+        ping: "Ping",
+        wavedToYou: "{name} waved to you",
+        wantsToTalk: "{name} wants to talk to you",
+        pingCooldown: "Please wait a bit before pinging {name} again.",
+    },
     imagePreview: {
         close: "Close",
         label: "Image preview",

@@ -3,6 +3,7 @@ import { get } from "svelte/store";
 import type { CancelablePromise } from "cancelable-promise";
 import {
     AskPositionMessage_AskType,
+    AvailabilityStatus,
     type PositionMessage,
     type PositionMessage_Direction,
     type SayMessage,
@@ -23,7 +24,7 @@ import chat from "../../Components/images/chat.png";
 import { userIsConnected } from "../../Stores/MenuStore";
 import RequiresLoginForChatModal from "../../Chat/Components/RequiresLoginForChatModal.svelte";
 import { analyticsClient } from "../../Administration/AnalyticsClient";
-import { IconCamera, IconUserPlus } from "@wa-icons";
+import { IconCamera, IconUserPlus, IconBellRinging, IconHandStop } from "@wa-icons";
 import { modals } from "@wa-modals";
 
 export enum RemotePlayerEvent {
@@ -274,6 +275,47 @@ export class RemotePlayer extends Character implements ActivatableInterface {
                 actionIcon: chat,
             });
         }
+        // Wave: sends a lightweight targeted signal (toast + chat-history line) to this player.
+        actions.push({
+            actionName: get(LL).chat.socialSignal.wave(),
+            protected: false,
+            priority: 4,
+            style: "bg-white/10 hover:bg-white/30",
+            callback: () => {
+                try {
+                    const room = this.scene.proximityChatRoomManager.getDefaultRoom();
+                    room?.sendWave(this.userUuid, this.scene.CurrentPlayer.playerName);
+                } catch (error) {
+                    Sentry.captureException(error);
+                }
+            },
+            actionIcon: IconHandStop,
+        });
+
+        // Ping (bell): only offered when the target is currently Busy / Do Not Disturb.
+        const remotePlayerStatus = this.scene.getRemotePlayersRepository().getPlayers().get(this.userId)
+            ?.availabilityStatus;
+        if (
+            remotePlayerStatus === AvailabilityStatus.BUSY ||
+            remotePlayerStatus === AvailabilityStatus.DO_NOT_DISTURB
+        ) {
+            actions.push({
+                actionName: get(LL).chat.socialSignal.ping(),
+                protected: false,
+                priority: 4,
+                style: "bg-white/10 hover:bg-white/30",
+                callback: () => {
+                    try {
+                        const room = this.scene.proximityChatRoomManager.getDefaultRoom();
+                        room?.sendPing(this.userUuid, this.scene.CurrentPlayer.playerName);
+                    } catch (error) {
+                        Sentry.captureException(error);
+                    }
+                },
+                actionIcon: IconBellRinging,
+            });
+        }
+
         // Add new action invite user to meet me
         actions.push({
             actionName: get(LL).chat.userList.invite(),

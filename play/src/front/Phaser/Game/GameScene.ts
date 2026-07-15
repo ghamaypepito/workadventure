@@ -499,6 +499,8 @@ export class GameScene extends DirtyScene {
         this.load.audio("new-message", "/resources/objects/new-message.mp3");
         this.load.audio("meeting-in", "/resources/objects/meeting-in.wav");
         this.load.audio("meeting-out", "/resources/objects/meeting-out.wav");
+        this.load.audio("wave", "/resources/objects/webrtc-out-ding.mp3");
+        this.load.audio("ping-bell", "/resources/objects/webrtc-in-ding.mp3");
 
         this.sound.pauseOnBlur = false;
 
