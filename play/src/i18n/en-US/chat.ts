@@ -50,6 +50,9 @@ const chat: BaseTranslation = {
         wavedToYou: "{name} waved to you",
         wantsToTalk: "{name} wants to talk to you",
         pingedYou: "{name} pinged you",
+        youWavedAt: "You waved at {name}",
+        youPinged: "You pinged {name}",
+        dismiss: "Dismiss",
     },
     imagePreview: {
         close: "Close",

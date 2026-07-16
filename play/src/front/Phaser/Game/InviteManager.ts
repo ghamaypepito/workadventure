@@ -11,7 +11,10 @@ import MeetingInvitationDeclinedToast from "../../Components/MeetingInvitation/M
 import MeetingInvitationAcceptedToast from "../../Components/MeetingInvitation/MeetingInvitationAcceptToast.svelte";
 import MeetingInvitationLimitToast from "../../Components/MeetingInvitation/MeetingInvitationLimitToast.svelte";
 import PingReceivedToast from "../../Components/SocialSignal/PingReceivedToast.svelte";
+import WaveReceivedToast from "../../Components/SocialSignal/WaveReceivedToast.svelte";
 import LL from "../../../i18n/i18n-svelte";
+
+export type SocialSignalKind = "wave" | "ping";
 
 const MEETING_INVITATION_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const MEETING_INVITATION_MAX_REQUESTS = 50;
@@ -92,29 +95,30 @@ export class InviteManager {
             }),
         );
 
-        // Show a toast + soft chime when a Ping (bell) is received. Delivered over the persistent
-        // connection to a specific user by uuid, independent of proximity space membership - see
-        // RemotePlayer.ts for why this can't just piggyback on the proximity broadcast channel like Wave.
+        // Show a toast + soft chime when a Wave or Ping is received. Delivered over the persistent
+        // connection to a specific user by uuid, independent of proximity space or map location -
+        // reaches the target anywhere on the map, including a Busy/Do Not Disturb user (that status
+        // change tears down proximity group/space membership, so this can't ride that channel).
         this.subscriptions.push(
-            this.connection.socialPingRequestReceivedStream.subscribe((payload) => {
-                const toastId = `social-signal-ping-${Date.now()}`;
+            this.connection.socialSignalReceivedStream.subscribe((payload) => {
+                const kind = payload.kind === "wave" ? "wave" : "ping";
+                const toastId = `social-signal-${kind}-${Date.now()}`;
                 toastStore.addToast(
-                    PingReceivedToast,
+                    kind === "wave" ? WaveReceivedToast : PingReceivedToast,
                     { actorName: payload.senderName, toastUuid: toastId },
                     toastId,
                 );
                 const scene = gameManager.getCurrentGameScene();
                 if (scene) {
-                    scene.playSound("ping-bell", 0.15);
+                    scene.playSound(kind === "wave" ? "wave" : "ping-bell", 0.15);
+                    const text =
+                        kind === "wave"
+                            ? get(LL).chat.socialSignal.wavedToYou({ name: payload.senderName })
+                            : get(LL).chat.socialSignal.pingedYou({ name: payload.senderName });
                     try {
-                        scene.proximityChatRoomManager
-                            .getDefaultRoom()
-                            ?.logSystemMessage(
-                                get(LL).chat.socialSignal.pingedYou({ name: payload.senderName }),
-                                payload.senderName,
-                            );
+                        scene.proximityChatRoomManager.getDefaultRoom()?.logSystemMessage(text, payload.senderName);
                     } catch (error) {
-                        console.error("Failed to log ping to chat history:", error);
+                        console.error(`Failed to log ${kind} to chat history:`, error);
                     }
                 }
             }),
@@ -169,12 +173,17 @@ export class InviteManager {
     }
 
     /**
-     * Sends a Ping (bell) to a Busy/Do Not Disturb user by uuid, over the persistent connection
+     * Sends a Wave or Ping to a user by uuid, anywhere on the map, over the persistent connection
      * (independent of proximity space membership). Shares the same server-side antispam limits
      * as meeting invitations (max 50 requests/10min, max 3 to the same user/10min).
      * @returns true if the request was sent, false if blocked by limits
      */
-    public requestPing(receiverUserUuid: string, receiverUserId?: number): boolean {
+    public requestSocialSignal(
+        kind: SocialSignalKind,
+        receiverUserUuid: string,
+        receiverUserName: string,
+        receiverUserId?: number,
+    ): boolean {
         const isAdmin = this.connection.isAdmin();
 
         if (!isAdmin) {
@@ -195,7 +204,22 @@ export class InviteManager {
             this.inviteRequestLog.push({ at: now, receiverUserUuid });
         }
 
-        this.connection.emitSocialPingRequest(receiverUserUuid, receiverUserId);
+        this.connection.emitSocialSignalRequest(receiverUserUuid, kind, receiverUserId);
+
+        // Log the send side too (item 3: sender sees "You waved at X" / "You pinged X").
+        const scene = gameManager.getCurrentGameScene();
+        if (scene) {
+            const text =
+                kind === "wave"
+                    ? get(LL).chat.socialSignal.youWavedAt({ name: receiverUserName })
+                    : get(LL).chat.socialSignal.youPinged({ name: receiverUserName });
+            try {
+                scene.proximityChatRoomManager.getDefaultRoom()?.logSystemMessage(text, receiverUserName);
+            } catch (error) {
+                console.error(`Failed to log ${kind} to chat history:`, error);
+            }
+        }
+
         return true;
     }
 

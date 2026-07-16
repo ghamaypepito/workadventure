@@ -112,7 +112,11 @@ export class HdpiManager {
     }
 
     public set zoomModifier(zoomModifier: number) {
-        this._zoomModifier = zoomModifier;
+        // Never allow zooming out further than the map size (_maxZoomOut, set from the map's
+        // dimensions) - below this, the modifier previously went unclamped here, letting scroll/pinch
+        // zoom out indefinitely past the edges of the map.
+        const minAllowedModifier = this._optimalZoomLevel > 0 ? this._maxZoomOut / this._optimalZoomLevel : 0;
+        this._zoomModifier = Math.max(zoomModifier, minAllowedModifier);
     }
 
     public set maxZoomOut(maxZoomOut: number) {

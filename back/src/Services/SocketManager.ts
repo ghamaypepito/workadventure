@@ -5,7 +5,7 @@ import type {
     BanUserMessage,
     MeetingInvitationRequestMessage,
     MeetingInvitationResponseMessage,
-    SocialPingRequestMessage,
+    SocialSignalRequestMessage,
     BatchToPusherRoomMessage,
     EditMapCommandMessage,
     EditMapCommandsArrayMessage,
@@ -1388,7 +1388,7 @@ export class SocketManager {
         }
     }
 
-    handleSocialPingRequestMessage(room: GameRoom, sender: User, message: SocialPingRequestMessage): void {
+    handleSocialSignalRequestMessage(room: GameRoom, sender: User, message: SocialSignalRequestMessage): void {
         const isAdmin = sender.tags.includes("admin");
         if (!isAdmin && room.isMeetingInvitationRequestTooHigh(sender.uuid, message.receiverUserUuid)) {
             sender.write({
@@ -1409,11 +1409,12 @@ export class SocketManager {
                 continue;
             }
             target.write({
-                $case: "socialPingRequestReceivedMessage",
-                socialPingRequestReceivedMessage: {
+                $case: "socialSignalReceivedMessage",
+                socialSignalReceivedMessage: {
                     senderUserUuid: sender.uuid,
                     senderName: sender.name,
                     senderUserId: sender.id,
+                    kind: message.kind,
                 },
             });
         }

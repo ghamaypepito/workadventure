@@ -432,7 +432,7 @@ message ClientToServerMessage {
     MeetingInvitationResponseMessage meetingInvitationResponseMessage = 49;
     SetAreaPropertyVariableMessage setAreaPropertyVariableMessage = 46;
     VideoQualityReportMessage videoQualityReportMessage = 50;
-    SocialPingRequestMessage socialPingRequestMessage = 51;
+    SocialSignalRequestMessage socialSignalRequestMessage = 51;
   }
 }
 
@@ -1135,20 +1135,23 @@ message MeetingInvitationResponseMessage {
 }
 
 /**
- * Sent by a user to "ping" (bell) another user by uuid, independent of any shared proximity
- * space membership - used to reach a user whose status is Busy/Do Not Disturb, since that
- * status change itself tears down their current proximity group/space.
+ * Sent by a user to Wave or Ping (bell) another user by uuid, independent of any shared proximity
+ * space membership - reaches a user anywhere on the map, including one whose status is Busy/Do Not
+ * Disturb (that status change itself tears down their current proximity group/space, which is why
+ * this can't just ride the proximity broadcast channel like generic proximity chat does).
  */
-message SocialPingRequestMessage {
+message SocialSignalRequestMessage {
   string receiverUserUuid = 1;
   optional int32 receiverUserId = 2;
+  string kind = 3; // "wave" | "ping"
 }
 
-/** Sent by the server to the target of a SocialPingRequestMessage. */
-message SocialPingRequestReceivedMessage {
+/** Sent by the server to the target of a SocialSignalRequestMessage. */
+message SocialSignalReceivedMessage {
   string senderUserUuid = 1;
   string senderName = 2;
   optional int32 senderUserId = 3;
+  string kind = 4; // "wave" | "ping"
 }
 
 /** Sent by the server to the requester when the invitee has accepted or declined. */
@@ -1383,7 +1386,7 @@ message ServerToClientMessage {
     MeetingInvitationRequestClosedMessage meetingInvitationRequestClosedMessage = 40;
     DuplicateUserConnectedMessage duplicateUserConnectedMessage = 41;
     BackConnectionCloseReasonMessage backConnectionCloseReasonMessage = 42;
-    SocialPingRequestReceivedMessage socialPingRequestReceivedMessage = 43;
+    SocialSignalReceivedMessage socialSignalReceivedMessage = 43;
   }
 }
 

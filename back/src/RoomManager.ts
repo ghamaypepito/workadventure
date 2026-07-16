@@ -203,11 +203,11 @@ const roomManager = {
                             );
                             break;
                         }
-                        case "socialPingRequestMessage": {
-                            socketManager.handleSocialPingRequestMessage(
+                        case "socialSignalRequestMessage": {
+                            socketManager.handleSocialSignalRequestMessage(
                                 room,
                                 user,
-                                message.message.socialPingRequestMessage,
+                                message.message.socialSignalRequestMessage,
                             );
                             break;
                         }

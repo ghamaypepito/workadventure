@@ -15,7 +15,7 @@
     import { showReportScreenStore } from "../../../Stores/ShowReportScreenStore";
     import { analyticsClient } from "../../../Administration/AnalyticsClient";
     import type { UserProviderMerger } from "../../UserProviderMerger/UserProviderMerger";
-    import { IconForbid, IconDots, IconCamera, IconMapPin, IconUserPlus } from "@wa-icons";
+    import { IconForbid, IconDots, IconCamera, IconMapPin, IconUserPlus, IconHandStop } from "@wa-icons";
 
     interface Props {
         user: ChatUser;
@@ -249,6 +249,24 @@
                 >
                     <IconUserPlus class="w-4" />
                     {$LL.chat.userList.invite()}
+                </span>
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <span
+                    class="wave wa-dropdown-item text-nowrap flex gap-2 items-center hover:bg-white/10 m-0 p-2 w-full text-sm rounded"
+                    data-testid="user-list-wave"
+                    onclick={(event) => {
+                        event.stopPropagation();
+                        if (user.uuid && user.username) {
+                            gameManager
+                                .getCurrentGameScene()
+                                .inviteManager?.requestSocialSignal("wave", user.uuid, user.username);
+                        }
+                        closeChatUserMenu();
+                    }}
+                >
+                    <IconHandStop class="w-4" />
+                    {$LL.chat.socialSignal.wave()}
                 </span>
             {:else if user.playUri}
                 <!-- svelte-ignore a11y_click_events_have_key_events -->

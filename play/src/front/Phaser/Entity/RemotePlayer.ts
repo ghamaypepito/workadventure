@@ -275,19 +275,16 @@ export class RemotePlayer extends Character implements ActivatableInterface {
                 actionIcon: chat,
             });
         }
-        // Wave: sends a lightweight targeted signal (toast + chat-history line) to this player.
+        // Wave: sends a lightweight targeted signal (toast + chat-history line) to this player,
+        // over the persistent connection by uuid - reaches them anywhere on the map, not just
+        // while sharing a proximity space.
         actions.push({
             actionName: get(LL).chat.socialSignal.wave(),
             protected: false,
             priority: 4,
             style: "bg-white/10 hover:bg-white/30",
             callback: () => {
-                try {
-                    const room = this.scene.proximityChatRoomManager.getDefaultRoom();
-                    room?.sendWave(this.userUuid, this.scene.CurrentPlayer.playerName);
-                } catch (error) {
-                    Sentry.captureException(error);
-                }
+                this.scene.inviteManager?.requestSocialSignal("wave", this.userUuid, this.playerName, this.userId);
             },
             actionIcon: IconHandStop,
         });
@@ -306,9 +303,9 @@ export class RemotePlayer extends Character implements ActivatableInterface {
                 style: "bg-white/10 hover:bg-white/30",
                 callback: () => {
                     // Uses the dedicated UUID-targeted backend message (not the proximity space
-                    // broadcast channel Wave uses) because going Busy/DND itself tears down the
-                    // recipient's proximity space membership server-side.
-                    this.scene.inviteManager?.requestPing(this.userUuid, this.userId);
+                    // broadcast channel generic proximity chat uses) because going Busy/DND itself
+                    // tears down the recipient's proximity space membership server-side.
+                    this.scene.inviteManager?.requestSocialSignal("ping", this.userUuid, this.playerName, this.userId);
                 },
                 actionIcon: IconBellRinging,
             });

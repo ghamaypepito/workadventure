@@ -75,7 +75,7 @@ import type {
     BackEventFrontToPusherMessage,
     AskPositionMessage_AskType,
     MeetingInvitationRequestReceivedMessage,
-    SocialPingRequestReceivedMessage,
+    SocialSignalReceivedMessage,
     MeetingInvitationResponseReceivedMessage,
     MeetingInvitationRequestClosedMessage,
     MeetingInvitationRequestTooHighMessage,
@@ -233,8 +233,8 @@ export class RoomConnection implements RoomConnection {
     private readonly _meetingInvitationRequestReceivedStream = new Subject<MeetingInvitationRequestReceivedMessage>();
     public readonly meetingInvitationRequestReceivedStream =
         this._meetingInvitationRequestReceivedStream.asObservable();
-    private readonly _socialPingRequestReceivedStream = new Subject<SocialPingRequestReceivedMessage>();
-    public readonly socialPingRequestReceivedStream = this._socialPingRequestReceivedStream.asObservable();
+    private readonly _socialSignalReceivedStream = new Subject<SocialSignalReceivedMessage>();
+    public readonly socialSignalReceivedStream = this._socialSignalReceivedStream.asObservable();
     private readonly _meetingInvitationResponseReceivedStream = new Subject<MeetingInvitationResponseReceivedMessage>();
     public readonly meetingInvitationResponseReceivedStream =
         this._meetingInvitationResponseReceivedStream.asObservable();
@@ -703,8 +703,8 @@ export class RoomConnection implements RoomConnection {
                     this._locatePositionMessageStream.next(message.locatePositionMessage);
                     break;
                 }
-                case "socialPingRequestReceivedMessage": {
-                    this._socialPingRequestReceivedStream.next(message.socialPingRequestReceivedMessage);
+                case "socialSignalReceivedMessage": {
+                    this._socialSignalReceivedStream.next(message.socialSignalReceivedMessage);
                     break;
                 }
                 case "meetingInvitationRequestReceivedMessage": {
@@ -1512,13 +1512,14 @@ export class RoomConnection implements RoomConnection {
         });
     }
 
-    public emitSocialPingRequest(receiverUserUuid: string, receiverUserId?: number): void {
+    public emitSocialSignalRequest(receiverUserUuid: string, kind: "wave" | "ping", receiverUserId?: number): void {
         this.send({
             message: {
-                $case: "socialPingRequestMessage",
-                socialPingRequestMessage: {
+                $case: "socialSignalRequestMessage",
+                socialSignalRequestMessage: {
                     receiverUserUuid,
                     receiverUserId,
+                    kind,
                 },
             },
         });
@@ -2156,7 +2157,7 @@ export class RoomConnection implements RoomConnection {
         this._websocketErrorStream.complete();
         this._moveToPositionMessageStream.complete();
         this._meetingInvitationRequestReceivedStream.complete();
-        this._socialPingRequestReceivedStream.complete();
+        this._socialSignalReceivedStream.complete();
         this._meetingInvitationResponseReceivedStream.complete();
         this._addSpaceUserMessageStream.complete();
         this._updateSpaceUserMessageStream.complete();

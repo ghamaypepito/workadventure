@@ -1,6 +1,7 @@
 <script lang="ts">
     import { LL } from "../../../i18n/i18n-svelte";
     import ToastContainer from "../Toasts/ToastContainer.svelte";
+    import { toastStore } from "../../Stores/ToastStoreSingleton";
 
     interface Props {
         actorName: string;
@@ -8,9 +9,17 @@
     }
 
     let { actorName, toastUuid = "" }: Props = $props();
-    const duration = 4000;
 </script>
 
-<ToastContainer theme="success" extraClasses="" {toastUuid} {duration}>
+<ToastContainer theme="success" extraClasses="" {toastUuid}>
     👋 {$LL.chat.socialSignal.wavedToYou({ name: actorName })}
+    {#snippet buttons()}
+        <button
+            type="button"
+            class="btn btn-light btn-ghost text-sm"
+            onclick={() => toastStore.removeToast(toastUuid)}
+        >
+            {$LL.chat.socialSignal.dismiss()}
+        </button>
+    {/snippet}
 </ToastContainer>

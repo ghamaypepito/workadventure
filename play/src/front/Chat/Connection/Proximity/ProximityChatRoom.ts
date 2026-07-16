@@ -38,9 +38,6 @@ import { roomSidePanelStore } from "../../Stores/RoomSidePanelStore";
 import { selectedRoomStore } from "../../Stores/SelectRoomStore";
 import { mapExtendedSpaceUserToChatUser } from "../../UserProvider/ChatUserMapper";
 import { loadChatHistory, persistChatMessage } from "./chatPersistence";
-import { decodeSocialSignal, encodeSocialSignal } from "./socialSignal";
-import { toastStore } from "../../../Stores/ToastStoreSingleton";
-import WaveReceivedToast from "../../../Components/SocialSignal/WaveReceivedToast.svelte";
 import { gameManager } from "../../../Phaser/Game/GameManager";
 import { availabilityStatusStore, requestedCameraState, requestedMicrophoneState } from "../../../Stores/MediaStore";
 import { localUserStore } from "../../../Connection/LocalUserStore";
@@ -371,32 +368,6 @@ export class ProximityChatRoom implements ChatRoom {
         }
     }
 
-    private myUuid(): string | undefined {
-        return this.users?.get(this._spaceUserId)?.uuid;
-    }
-
-    /**
-     * Sends a Wave to a specific user, visible to them alone as a toast + a line in this chat's history.
-     * Note: this rides on the proximity space's broadcast channel, which is fine for Wave (both users
-     * are actively together when this is used) but NOT suitable for Ping - see RemotePlayer.ts / InviteManager
-     * for why Ping uses a dedicated UUID-targeted backend message instead.
-     */
-    sendWave(targetUuid: string, actorName: string): void {
-        this._space?.emitPublicMessage({
-            $case: "spaceMessage",
-            spaceMessage: { message: encodeSocialSignal({ kind: "wave", targetUuid, actorName }), characterTextures: [], name: actorName },
-        });
-    }
-
-    private handleIncomingSocialSignal(signal: ReturnType<typeof decodeSocialSignal>, actorName: string): void {
-        if (!signal || signal.targetUuid !== this.myUuid()) return;
-
-        const toastId = `social-signal-wave-${Date.now()}`;
-        toastStore.addToast(WaveReceivedToast, { actorName, toastUuid: toastId }, toastId);
-        gameManager.getCurrentGameScene().playSound("wave", 0.15);
-        this.logSystemMessage(get(LL).chat.socialSignal.wavedToYou({ name: actorName }), actorName);
-    }
-
     /**
      * Adds a system-style line (e.g. "X waved to you", "X pinged you") to this chat's timeline and,
      * for non-guests, persists it into chat history - without broadcasting it (the event that
@@ -407,24 +378,17 @@ export class ProximityChatRoom implements ChatRoom {
         persistChatMessage(this.spaceName, actorName, text);
     }
 
-    private addEnteringChatWithUsers(users: SpaceUserExtended[]) {
-        let userNames: string;
-        if (Intl.ListFormat) {
-            const formatter = new Intl.ListFormat(get(locale), { style: "long", type: "conjunction" });
-            userNames = formatter.format(users.map((user) => user.name));
-        } else {
-            // For old browsers
-            userNames = users.map((user) => user.name).join(", ");
-        }
-        this.sendMessage(get(LL).chat.timeLine.newDiscussion({ userNames }), "incoming", false);
+    // Note: "New discussion with X" / "X has left the discussion" system lines were removed from the
+    // timeline per product decision - these methods intentionally no longer post a chat message.
+    private addEnteringChatWithUsers(_users: SpaceUserExtended[]) {
+        // no-op
     }
 
-    private addIncomingUser(spaceUser: SpaceUserExtended): void {
-        this.sendMessage(get(LL).chat.timeLine.incoming({ userName: spaceUser.name }), "incoming", false);
+    private addIncomingUser(_spaceUser: SpaceUserExtended): void {
+        // no-op
     }
 
     private addOutcomingUser(spaceUser: SpaceUserExtended): void {
-        this.sendMessage(get(LL).chat.timeLine.outcoming({ userName: spaceUser.name }), "outcoming", false);
         this.removeTypingUserbyID(spaceUser.spaceUserId.toString());
     }
 
@@ -1083,12 +1047,6 @@ export class ProximityChatRoom implements ChatRoom {
         this.spaceMessageSubscription?.unsubscribe();
         this.spaceMessageSubscription = this._space.observePublicEvent("spaceMessage").subscribe((event) => {
             if (isBlackListed(event.sender)) {
-                return;
-            }
-
-            const signal = decodeSocialSignal(event.spaceMessage.message);
-            if (signal) {
-                this.handleIncomingSocialSignal(signal, event.spaceMessage.name ?? this.unknownUserName);
                 return;
             }
 
