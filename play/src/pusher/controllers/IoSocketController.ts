@@ -1053,7 +1053,8 @@ export class IoSocketController {
                             case "pingMessage":
                             case "askPositionMessage":
                             case "meetingInvitationRequestMessage":
-                            case "meetingInvitationResponseMessage": {
+                            case "meetingInvitationResponseMessage":
+                            case "socialSignalRequestMessage": {
                                 socketManager.forwardMessageToBack(socket, message.message);
                                 break;
                             }
