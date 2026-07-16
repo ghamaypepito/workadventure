@@ -1436,9 +1436,10 @@ export class ProximityChatRoom implements ChatRoom {
                     }
                     if (isMeetingRoomChat) {
                         this.sendMessage(get(LL).chat.timeLine.youleftMeetingRoom(), "outcoming", false);
-                    } else {
-                        this.sendMessage(get(LL).chat.timeLine.outcoming({ userName: user.name }), "outcoming", false);
                     }
+                    // Note: the per-user "X has left the discussion" line was removed from the
+                    // timeline per product decision (see addOutcomingUser above for the other
+                    // "New discussion with X" / "X has left" call sites removed at the same time).
                 }
             }
             this.typingMembers.set([]);
