@@ -1389,8 +1389,12 @@ export class SocketManager {
     }
 
     handleSocialSignalRequestMessage(room: GameRoom, sender: User, message: SocialSignalRequestMessage): void {
+        console.log(
+            `[socialSignal] request kind=${message.kind} from=${sender.uuid}(${sender.name}) to=${message.receiverUserUuid}`,
+        );
         const isAdmin = sender.tags.includes("admin");
         if (!isAdmin && room.isMeetingInvitationRequestTooHigh(sender.uuid, message.receiverUserUuid)) {
+            console.log(`[socialSignal] blocked by antispam limit for sender=${sender.uuid}`);
             sender.write({
                 $case: "meetingInvitationRequestTooHighMessage",
                 meetingInvitationRequestTooHighMessage: {},
@@ -1401,13 +1405,16 @@ export class SocketManager {
             room.logMeetingInvitationRequest(sender.uuid, message.receiverUserUuid);
         }
         const targets = room.getUsersByUuid(message.receiverUserUuid);
+        console.log(`[socialSignal] found ${targets.size} target(s) for uuid=${message.receiverUserUuid}`);
         if (targets.size === 0) {
             return;
         }
         for (const target of targets) {
             if (target.id === sender.id) {
+                console.log(`[socialSignal] skipping target with same id as sender (id=${target.id})`);
                 continue;
             }
+            console.log(`[socialSignal] writing socialSignalReceivedMessage to target id=${target.id}`);
             target.write({
                 $case: "socialSignalReceivedMessage",
                 socialSignalReceivedMessage: {
