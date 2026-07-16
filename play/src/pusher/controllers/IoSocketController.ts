@@ -608,6 +608,12 @@ export class IoSocketController {
                             return;
                         }
 
+                        if (message.message.$case === "socialSignalRequestMessage") {
+                            console.log(
+                                `[socialSignal] pusher received from browser: kind=${message.message.socialSignalRequestMessage.kind} to=${message.message.socialSignalRequestMessage.receiverUserUuid}`,
+                            );
+                        }
+
                         switch (message.message.$case) {
                             case "joinRoomFrontMessage": {
                                 await socketManager.handleJoinRoom(socket, message.message.joinRoomFrontMessage);

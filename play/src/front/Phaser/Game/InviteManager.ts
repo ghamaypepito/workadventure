@@ -101,6 +101,7 @@ export class InviteManager {
         // change tears down proximity group/space membership, so this can't ride that channel).
         this.subscriptions.push(
             this.connection.socialSignalReceivedStream.subscribe((payload) => {
+                console.log(`[socialSignal] client received kind=${payload.kind} from=${payload.senderName}`);
                 const kind = payload.kind === "wave" ? "wave" : "ping";
                 const toastId = `social-signal-${kind}-${Date.now()}`;
                 toastStore.addToast(
@@ -184,6 +185,7 @@ export class InviteManager {
         receiverUserName: string,
         receiverUserId?: number,
     ): boolean {
+        console.log(`[socialSignal] client emitting kind=${kind} to=${receiverUserUuid} (${receiverUserName})`);
         const isAdmin = this.connection.isAdmin();
 
         if (!isAdmin) {
@@ -192,6 +194,7 @@ export class InviteManager {
             this.inviteRequestLog = this.inviteRequestLog.filter((e) => e.at > cutoff);
 
             if (this.inviteRequestLog.length >= MEETING_INVITATION_MAX_REQUESTS) {
+                console.log("[socialSignal] blocked client-side by antispam limit");
                 this.showLimitReachedToast();
                 return false;
             }
