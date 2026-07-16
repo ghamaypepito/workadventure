@@ -1534,6 +1534,7 @@ message PusherToBackMessage {
     MeetingInvitationRequestMessage meetingInvitationRequestMessage = 32;
     MeetingInvitationResponseMessage meetingInvitationResponseMessage = 33;
     SetAreaPropertyVariableMessage setAreaPropertyVariableMessage = 34;
+    SocialSignalRequestMessage socialSignalRequestMessage = 35;
   }
 }
 
