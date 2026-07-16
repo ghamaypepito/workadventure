@@ -46,6 +46,16 @@ const chat: DeepPartial<Translation["chat"]> = {
         defaultResponderName: "De gebruiker",
         limitReached: "Je hebt te veel vergaderuitnodigingen verzonden. Probeer het later opnieuw.",
     },
+    socialSignal: {
+        wave: "Wave",
+        ping: "Ping",
+        wavedToYou: "{name} waved to you",
+        wantsToTalk: "{name} wants to talk to you",
+        pingedYou: "{name} pinged you",
+        youWavedAt: "You waved at {name}",
+        youPinged: "You pinged {name}",
+        dismiss: "Dismiss",
+    },
     imagePreview: {
         close: "Sluiten",
         label: "Afbeeldingsvoorbeeld",

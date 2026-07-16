@@ -46,6 +46,16 @@ const chat: DeepPartial<Translation["chat"]> = {
         defaultResponderName: "ユーザー",
         limitReached: "ミーティングへの招待を送りすぎました。しばらくしてからもう一度お試しください。",
     },
+    socialSignal: {
+        wave: "Wave",
+        ping: "Ping",
+        wavedToYou: "{name} waved to you",
+        wantsToTalk: "{name} wants to talk to you",
+        pingedYou: "{name} pinged you",
+        youWavedAt: "You waved at {name}",
+        youPinged: "You pinged {name}",
+        dismiss: "Dismiss",
+    },
     imagePreview: {
         close: "閉じる",
         label: "画像プレビュー",
