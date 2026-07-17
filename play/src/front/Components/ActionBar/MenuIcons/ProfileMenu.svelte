@@ -68,7 +68,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div data-testid="action-user" class="flex items-center transition-all pointer-events-auto">
     <div
-        class="group bg-contrast/80 backdrop-blur rounded-lg h-16 @sm/actions:h-14 @xl/actions:h-16 p-2 cursor-pointer"
+        class="group rounded-lg h-16 @sm/actions:h-14 @xl/actions:h-16 p-2 cursor-pointer"
         class:profile-menu-force-burger={forceBurgerMode}
         bind:this={triggerElement}
         onclick={(event) => {

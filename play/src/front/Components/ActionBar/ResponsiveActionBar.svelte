@@ -101,7 +101,10 @@
         ? 'hidden'
         : ''}"
 >
-    <div {@attach blocker} class="gap-1 @md/actions:gap-2 @xl/actions:gap-4 p-1 @md/actions:p-2 @xl/actions:p-4">
+    <div
+        {@attach blocker}
+        class="bg-contrast/80 backdrop-blur rounded-lg pointer-events-auto gap-1 @md/actions:gap-2 @xl/actions:gap-4 p-1 @md/actions:p-2 @xl/actions:p-4"
+    >
         <div class="w-full flex justify-between items-center" bind:offsetWidth={actionBarWidth}>
             <!-- Left bar -->
             <div class="flex-1 flex">
