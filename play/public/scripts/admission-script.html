@@ -112,6 +112,21 @@
             return;
         }
 
+        // Register this session's WA player uuid -> SSO email, so chat history (keyed by uuid on
+        // the client) can be resolved to the account's email server-side. This is what makes chat
+        // history follow the account across devices/browsers instead of being tied to whichever
+        // browser-local WA uuid happens to be active.
+        try {
+            const uuid = await WA.player.uuid;
+            fetch('/api/admission/identity', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uuid }),
+            }).catch((e) => console.error('[admission] identity registration failed', e));
+        } catch (e) {
+            console.error('[admission] failed to read player uuid for identity registration', e);
+        }
+
         // Recognized (non-guest) user: enters immediately, no wait.
         // Offer them the seat picker so they can choose where to sit.
         await offerSeatPicker();

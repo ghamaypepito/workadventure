@@ -7,6 +7,7 @@ const PENDING_KEY = 'wa:pending-admission';
 const MAX_AGE_MS = 10 * 60 * 1000; // ignore stale requests older than 10 minutes
 const CHAT_HISTORY_DEFAULT_LIMIT = 50; // messages per page when the client doesn't specify a limit
 const CHAT_HISTORY_MAX_LIMIT = 200; // hard cap per single page request
+const IDENTITY_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days; refreshed on every login
 
 async function readBody(req) {
     let body = '';
@@ -132,6 +133,45 @@ async function approve(req, res) {
     res.end(JSON.stringify({ success: true }));
 }
 
+// Requires a signed-in (non-guest) user. Registers this WA player uuid -> SSO email for the
+// current session, so chat history (keyed client-side by WA uuid, which is only stable per
+// browser) can be resolved server-side to the account's email, which is stable across devices.
+async function identity(req, res) {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const parsed = await readBody(req);
+    if (parsed === null || !parsed.uuid) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing uuid' }));
+        return;
+    }
+
+    await withRedis(REDIS_URL, async (client) => {
+        await client.command('SET', `wa:uuid-email:${parsed.uuid}`, user.email, 'EX', String(IDENTITY_TTL_SECONDS));
+    });
+
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true }));
+}
+
+// Resolves a conversation key built from WA player uuids (e.g. "uuidA|uuidB") into one built from
+// the accounts' emails where known, falling back to the raw uuid for any segment that has no
+// registered mapping (e.g. a guest, or a user who hasn't triggered identity registration yet).
+// Sorted again after resolution so the key stays canonical regardless of segment order.
+async function resolveConversationKey(rawKey) {
+    const segments = rawKey.split('|').filter(Boolean);
+    const resolved = await withRedis(REDIS_URL, async (client) => {
+        const emails = [];
+        for (const segment of segments) {
+            const email = await client.command('GET', `wa:uuid-email:${segment}`);
+            emails.push(email || segment);
+        }
+        return emails;
+    });
+    return Array.from(new Set(resolved)).sort().join('|');
+}
+
 // Requires a signed-in (non-guest) user: only real users' messages are persisted, and only
 // real users can read history back (guests never see or contribute to saved history).
 async function chatHistoryGet(req, res) {
@@ -151,7 +191,7 @@ async function chatHistoryGet(req, res) {
         Math.max(1, parseInt(url.searchParams.get('limit'), 10) || CHAT_HISTORY_DEFAULT_LIMIT),
     );
 
-    const key = `wa:chat:${room}`;
+    const key = `wa:chat:${await resolveConversationKey(room)}`;
     const { raw, total } = await withRedis(REDIS_URL, async (client) => {
         const raw = await client.command('LRANGE', key, String(offset), String(offset + limit - 1));
         const total = await client.command('LLEN', key);
@@ -190,9 +230,11 @@ async function chatHistoryPost(req, res) {
         ts: Date.now(),
     });
 
+    const key = `wa:chat:${await resolveConversationKey(parsed.room)}`;
+
     // No LTRIM here on purpose: history is kept in full, from the first message onward.
     await withRedis(REDIS_URL, async (client) => {
-        await client.command('LPUSH', `wa:chat:${parsed.room}`, entry);
+        await client.command('LPUSH', key, entry);
     });
 
     res.statusCode = 200;
@@ -220,6 +262,8 @@ module.exports = async (req, res) => {
         } else if (segment === 'chat-history') {
             if (req.method === 'POST') await chatHistoryPost(req, res);
             else await chatHistoryGet(req, res);
+        } else if (segment === 'identity') {
+            await identity(req, res);
         } else {
             res.statusCode = 404;
             res.end(JSON.stringify({ error: 'Not found' }));
