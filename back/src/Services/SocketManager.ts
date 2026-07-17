@@ -1402,18 +1402,12 @@ export class SocketManager {
         }
         const targets = room.getUsersByUuid(message.receiverUserUuid);
         if (targets.size === 0) {
-            console.log(
-                `[socialSignal] DEBUG no target found for uuid=${message.receiverUserUuid}. Known users in room: ${JSON.stringify(
-                    Array.from(room.getUsers().values()).map((u) => ({ id: u.id, uuid: u.uuid, name: u.name })),
-                )}`,
-            );
             return;
         }
         for (const target of targets) {
             if (target.id === sender.id) {
                 continue;
             }
-            console.log(`[socialSignal] DEBUG delivering to target id=${target.id} uuid=${target.uuid} name=${target.name}`);
             target.write({
                 $case: "socialSignalReceivedMessage",
                 socialSignalReceivedMessage: {
