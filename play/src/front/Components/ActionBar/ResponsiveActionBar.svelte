@@ -103,7 +103,7 @@
 >
     <div
         {@attach blocker}
-        class="bg-[#1c2a41] backdrop-blur rounded-lg pointer-events-auto gap-1 @md/actions:gap-2 @xl/actions:gap-4 p-1 @md/actions:p-2 @xl/actions:p-4 max-w-4xl mx-auto"
+        class="bg-[#1c2a41] backdrop-blur rounded-lg pointer-events-auto gap-1 @md/actions:gap-1.5 @xl/actions:gap-2 p-1 @md/actions:p-1.5 @xl/actions:p-2 max-w-6xl mx-auto"
     >
         <div class="w-full flex justify-between items-center" bind:offsetWidth={actionBarWidth}>
             <!-- Left bar -->
