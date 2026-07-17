@@ -37,7 +37,7 @@ import { isAChatRoomIsVisible, navChat, shouldRestoreChatStateStore } from "../.
 import { roomSidePanelStore } from "../../Stores/RoomSidePanelStore";
 import { selectedRoomStore } from "../../Stores/SelectRoomStore";
 import { mapExtendedSpaceUserToChatUser } from "../../UserProvider/ChatUserMapper";
-import { loadChatHistory, persistChatMessage } from "./chatPersistence";
+import { conversationKeyFor, loadChatHistory, persistChatMessage } from "./chatPersistence";
 import { gameManager } from "../../../Phaser/Game/GameManager";
 import { availabilityStatusStore, requestedCameraState, requestedMicrophoneState } from "../../../Stores/MediaStore";
 import { localUserStore } from "../../../Connection/LocalUserStore";
@@ -131,7 +131,9 @@ export class ProximityChatRoom implements ChatRoom {
     pictureStore = readable(undefined);
     avatarFallbackColor = readable(undefined);
     messages: SearchableArrayStore<string, ChatMessage> = new SearchableArrayStore((item) => item.id);
-    private historyLoadedForRooms = new Set<string>();
+    /** Tracks pagination state for loadMorePreviousMessages(), per conversation key (see conversationKey()). */
+    private historyKeyLoaded: string | undefined;
+    private historyOffset = 0;
     /** Space users of the current space (forwarded from _space.usersStore on join, empty map on leave). */
     public readonly spaceUsersStore = new ForwardableStore<Map<string, SpaceUserExtended>>(new Map());
     private readonly spaceMetadataStore = writable<Map<string, unknown>>(new Map());
@@ -333,7 +335,8 @@ export class ProximityChatRoom implements ChatRoom {
 
         // Persist real chat messages (not synthetic join/leave notices) for signed-in users only.
         if (action === "proximity" && broadcast) {
-            persistChatMessage(this.spaceName, chatUser.username ?? this.unknownUserName, message);
+            const key = this.conversationKey();
+            if (key) persistChatMessage(key, chatUser.username ?? this.unknownUserName, message);
         }
 
         if (action === "proximity") {
@@ -346,12 +349,38 @@ export class ProximityChatRoom implements ChatRoom {
         }
     }
 
-    private async loadPersistedHistory(room: string): Promise<void> {
-        if (this.historyLoadedForRooms.has(room)) return;
-        this.historyLoadedForRooms.add(room);
+    /**
+     * Stable, order-independent key for the CURRENT set of proximity-bubble participants (including
+     * self). Used instead of `this.spaceName` (a reusable UI wrapper whose underlying space gets
+     * reassigned across unrelated encounters) so a conversation between the same people has one
+     * continuous history across sessions/bubbles, separate from other people's conversations.
+     */
+    private conversationKey(): string | undefined {
+        if (!this.users) return undefined;
+        return conversationKeyFor(Array.from(this.users.values()).map((u) => u.uuid));
+    }
 
-        const history = await loadChatHistory(room);
-        for (const entry of history) {
+    /**
+     * Loads the next (older) page of persisted history for the current conversation, called both on
+     * initial chat-panel open and as the user scrolls up (see RoomTimeline.svelte's generic
+     * loadMorePreviousMessages()/hasPreviousMessage polymorphic handling, shared with Matrix rooms).
+     */
+    async loadMorePreviousMessages(): Promise<void> {
+        const key = this.conversationKey();
+        if (!key) {
+            this.hasPreviousMessage.set(false);
+            return;
+        }
+        if (key !== this.historyKeyLoaded) {
+            this.historyKeyLoaded = key;
+            this.historyOffset = 0;
+        }
+
+        const { messages: page, hasMore } = await loadChatHistory(key, this.historyOffset);
+        this.historyOffset += page.length;
+        this.hasPreviousMessage.set(hasMore);
+
+        for (const entry of page) {
             const content = { body: entry.message, url: undefined };
             const historyMessage = new ProximityChatMessage(
                 uuidv4(),
@@ -363,7 +392,7 @@ export class ProximityChatRoom implements ChatRoom {
             );
             this.messages.push(historyMessage);
         }
-        if (history.length > 0) {
+        if (page.length > 0) {
             this.hasUserMessages.set(true);
         }
     }
@@ -372,10 +401,14 @@ export class ProximityChatRoom implements ChatRoom {
      * Adds a system-style line (e.g. "X waved to you", "X pinged you") to this chat's timeline and,
      * for non-guests, persists it into chat history - without broadcasting it (the event that
      * triggered it, e.g. a Wave/Ping, was already delivered over its own channel).
+     * @param otherUuid uuid of the other party in this specific exchange (the wave/ping counterpart) -
+     * NOT necessarily the current proximity-bubble participants, since Wave/Ping can reach someone
+     * who isn't currently nearby.
      */
-    public logSystemMessage(text: string, actorName: string): void {
+    public logDirectMessage(text: string, actorName: string, otherUuid: string): void {
         this.sendMessage(text, "incoming", false);
-        persistChatMessage(this.spaceName, actorName, text);
+        const key = conversationKeyFor([localUserStore.getLocalUser()?.uuid, otherUuid]);
+        if (key) persistChatMessage(key, actorName, text);
     }
 
     // Note: "New discussion with X" / "X has left the discussion" system lines were removed from the
@@ -826,10 +859,6 @@ export class ProximityChatRoom implements ChatRoom {
         return unmuteProximityChatNotifications(this.areNotificationsMuted);
     }
 
-    loadMorePreviousMessages(): Promise<void> {
-        return Promise.resolve();
-    }
-
     addExternalMessage(type: "local" | "bubble", message: string, authorName?: string): void {
         // Create content message
         const newChatMessageContent = {
@@ -1000,10 +1029,6 @@ export class ProximityChatRoom implements ChatRoom {
 
         await this.throwIfAborted(joinSignal, spaceForThisJoin);
 
-        this.loadPersistedHistory(spaceName).catch((e) =>
-            console.error("Error loading persisted chat history", e),
-        );
-
         let hasUserInProximityChat = false;
 
         this.spaceUsersStore.forward(this._space.usersStore);
@@ -1019,6 +1044,18 @@ export class ProximityChatRoom implements ChatRoom {
 
         this.usersUnsubscriber = this._space.usersStore.subscribe((users) => {
             this.users = users;
+
+            // Load this conversation's persisted history the first time we see this exact set of
+            // participants (loadMorePreviousMessages() also gets called by the chat UI on scroll-up
+            // and on panel open/mount - this call just ensures a newly-formed conversation gets its
+            // first page even if the panel was already open and showing this same room object).
+            const key = this.conversationKey();
+            if (key && key !== this.historyKeyLoaded) {
+                this.loadMorePreviousMessages().catch((e) =>
+                    console.error("Error loading persisted chat history", e),
+                );
+            }
+
             this._currentMeetingParticipantsStore.set(this.mapSpaceUsersToMeetingParticipants(users));
             if (!hasUserInProximityChat && users.size > 1) {
                 let name = this.unknownUserName;

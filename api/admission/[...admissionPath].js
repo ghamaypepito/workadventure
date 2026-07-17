@@ -5,7 +5,8 @@ const { REDIS_URL } = require('../_lib/admin');
 
 const PENDING_KEY = 'wa:pending-admission';
 const MAX_AGE_MS = 10 * 60 * 1000; // ignore stale requests older than 10 minutes
-const CHAT_HISTORY_MAX = 200; // messages kept per room
+const CHAT_HISTORY_DEFAULT_LIMIT = 50; // messages per page when the client doesn't specify a limit
+const CHAT_HISTORY_MAX_LIMIT = 200; // hard cap per single page request
 
 async function readBody(req) {
     let body = '';
@@ -144,9 +145,17 @@ async function chatHistoryGet(req, res) {
         res.end(JSON.stringify({ error: 'Missing room' }));
         return;
     }
+    const offset = Math.max(0, parseInt(url.searchParams.get('offset'), 10) || 0);
+    const limit = Math.min(
+        CHAT_HISTORY_MAX_LIMIT,
+        Math.max(1, parseInt(url.searchParams.get('limit'), 10) || CHAT_HISTORY_DEFAULT_LIMIT),
+    );
 
-    const raw = await withRedis(REDIS_URL, async (client) => {
-        return client.command('LRANGE', `wa:chat:${room}`, '0', String(CHAT_HISTORY_MAX - 1));
+    const key = `wa:chat:${room}`;
+    const { raw, total } = await withRedis(REDIS_URL, async (client) => {
+        const raw = await client.command('LRANGE', key, String(offset), String(offset + limit - 1));
+        const total = await client.command('LLEN', key);
+        return { raw, total: parseInt(total, 10) || 0 };
     });
 
     const messages = (raw || [])
@@ -161,7 +170,7 @@ async function chatHistoryGet(req, res) {
         .reverse();
 
     res.statusCode = 200;
-    res.end(JSON.stringify({ messages }));
+    res.end(JSON.stringify({ messages, hasMore: offset + (raw || []).length < total }));
 }
 
 async function chatHistoryPost(req, res) {
@@ -181,9 +190,9 @@ async function chatHistoryPost(req, res) {
         ts: Date.now(),
     });
 
+    // No LTRIM here on purpose: history is kept in full, from the first message onward.
     await withRedis(REDIS_URL, async (client) => {
         await client.command('LPUSH', `wa:chat:${parsed.room}`, entry);
-        await client.command('LTRIM', `wa:chat:${parsed.room}`, '0', String(CHAT_HISTORY_MAX - 1));
     });
 
     res.statusCode = 200;

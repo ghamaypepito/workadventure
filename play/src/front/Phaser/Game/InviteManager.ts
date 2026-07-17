@@ -116,7 +116,9 @@ export class InviteManager {
                             ? get(LL).chat.socialSignal.wavedToYou({ name: payload.senderName })
                             : get(LL).chat.socialSignal.pingedYou({ name: payload.senderName });
                     try {
-                        scene.proximityChatRoomManager.getDefaultRoom()?.logSystemMessage(text, payload.senderName);
+                        scene.proximityChatRoomManager
+                            .getDefaultRoom()
+                            ?.logDirectMessage(text, payload.senderName, payload.senderUserUuid);
                     } catch (error) {
                         console.error(`Failed to log ${kind} to chat history:`, error);
                     }
@@ -214,7 +216,9 @@ export class InviteManager {
                     ? get(LL).chat.socialSignal.youWavedAt({ name: receiverUserName })
                     : get(LL).chat.socialSignal.youPinged({ name: receiverUserName });
             try {
-                scene.proximityChatRoomManager.getDefaultRoom()?.logSystemMessage(text, receiverUserName);
+                scene.proximityChatRoomManager
+                    .getDefaultRoom()
+                    ?.logDirectMessage(text, receiverUserName, receiverUserUuid);
             } catch (error) {
                 console.error(`Failed to log ${kind} to chat history:`, error);
             }
