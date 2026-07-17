@@ -82,7 +82,7 @@
 
                                 {#if smallArrowVisible}
                                     <div
-                                        class="absolute h-3 mobile:h-6 w-7 rounded-t bg-[#1c2a41] backdrop-blur start-[2.3rem] @xl/actions:start-[2.86rem] m-auto p-1 z-10 transition-all -top-8 hidden opacity-0 sm:block mobile:block {$inExternalServiceStore
+                                        class="absolute h-3 mobile:h-6 w-7 rounded-t bg-[#1c2a41] backdrop-blur start-[2.3rem] @xl/actions:start-[2.86rem] m-auto p-1 z-10 transition-all -top-4 hidden opacity-0 sm:block mobile:block {$inExternalServiceStore
                                             ? ''
                                             : 'mobile:opacity-100'}
                                         {$mediaSettingsOpenStore || $isInRemoteConversation
