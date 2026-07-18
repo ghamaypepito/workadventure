@@ -5,7 +5,6 @@ import { hasMovedEventName } from "../Phaser/Player/Player";
 import { isInRemoteConversation } from "./StreamableCollectionStore";
 import { highlightedEmbedScreen } from "./HighlightedEmbedScreenStore";
 import { activePictureInPictureStore } from "./PeerStore";
-import { meetingViewStore } from "./MeetingViewStore";
 // Time in milliseconds before switching to multi-line mode
 export const SWITCH_TO_MULTILINE_DELAY = 3500;
 
@@ -51,23 +50,13 @@ export const playerMovedInTheLast10Seconds = readable(true, function start(set) 
 
 // Store for the layout mode (derived from playerMovedInTheLast10Seconds and isInRemoteConversation and pictureInPictureStore)
 export const isOnOneLine = derived(
-    [
-        playerMovedInTheLast10Seconds,
-        isInRemoteConversation,
-        highlightedEmbedScreen,
-        activePictureInPictureStore,
-        meetingViewStore,
-    ],
+    [playerMovedInTheLast10Seconds, isInRemoteConversation, highlightedEmbedScreen, activePictureInPictureStore],
     ([
         $playerMovedInTheLast10Seconds,
         $isInRemoteConversation,
         $highlightedEmbedScreen,
         $activePictureInPictureStore,
-        $meetingViewStore,
     ]) => {
-        // Meeting view always forces the full multi-line grid, regardless of movement.
-        if ($meetingViewStore) return false;
-
         // Show one line if we are NOT in a conversation or the player has moved recently
         return (
             $playerMovedInTheLast10Seconds ||
