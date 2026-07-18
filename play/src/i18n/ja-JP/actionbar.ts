@@ -3,6 +3,8 @@ import type { Translation } from "../i18n-types";
 
 const actionbar: DeepPartial<Translation["actionbar"]> = {
     understand: "了解しました！",
+    mapView: "Map view",
+    meetingView: "Meeting view",
     edit: "編集",
     cancel: "キャンセル",
     close: "閉じる",
