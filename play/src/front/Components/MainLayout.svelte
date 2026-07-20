@@ -253,24 +253,13 @@
     {/if}
 
     {#if $meetingViewStore}
-        <!-- Meeting view: covers the map with a grid of everyone currently in proximity with you.
-             Built directly from MediaBox (the same low-level video-tile component the fullscreen
-             single-highlight view above already uses successfully) with an explicit CSS grid,
-             rather than reusing CamerasContainer's own width/height-measurement-driven layout -
-             that one depends on its wrapping element already having a real measured size, which
-             didn't come through inside this overlay. -->
-        <div class="w-full h-full fixed start-0 end-0 z-[300] bg-[#1c2a41] pointer-events-auto overflow-y-auto p-4">
-            <div
-                class="grid gap-4 h-full content-center"
-                style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));"
-            >
-                {#each [...$streamableCollectionStore.values()] as videoBox (videoBox.uniqueId)}
-                    <div class="aspect-video">
-                        <MediaBox {videoBox} fullScreen={false} />
-                    </div>
-                {/each}
-            </div>
-        </div>
+        <!-- Meeting view: opaque backdrop behind the map, and blocks clicks from reaching the
+             canvas underneath. The actual video grid is the SAME PresentationLayout instance
+             used for the normal floating call strip - forcing isOnOneLine to false (see
+             VideoLayoutStore.ts) makes it expand to fill the screen on its own, rather than
+             spawning a second, separate CamerasContainer here (which doesn't work: streams only
+             render into whichever CamerasContainer instance was already handling them). -->
+        <div class="w-full h-full fixed start-0 end-0 z-[300] bg-[#1c2a41] pointer-events-auto"></div>
     {/if}
     <MeetingViewToggle />
 
