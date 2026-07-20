@@ -21,6 +21,17 @@ export class WaScaleManager {
     private lastEmittedActualZoom: number | undefined;
 
     private focusTarget?: WaScaleManagerFocusTarget;
+    private mapSize?: { width: number; height: number };
+
+    /**
+     * Registers the map's real pixel dimensions so applyNewSize() can clamp the camera zoom
+     * directly (see there) instead of going through the separate zoomModifier/maxZoomOut
+     * indirection, which requires two independently-computed optimalZoomLevel values (one here,
+     * one in HdpiManager) to stay perfectly in sync to avoid drift.
+     */
+    public setMapSize(width: number, height: number): void {
+        this.mapSize = { width, height };
+    }
 
     public constructor(
         private minGamePixelsNumber: number,
@@ -65,6 +76,16 @@ export class WaScaleManager {
             this.actualZoom = realSize.width / gameSize.width / devicePixelRatio;
         }
 
+        // Never let the visible world area exceed the map's own size (i.e. never show empty space
+        // beyond the map edges from zooming out too far). Clamped here - after actualZoom is
+        // computed from the TRUE HDPI-driven gameSize above, so DOM scaling stays correct - and in
+        // game-pixel units on both sides (gameSize vs mapSize), so there's no unit-conversion risk
+        // like there was going through the separate zoomModifier/maxZoomOut indirection.
+        if (this.mapSize) {
+            gameSize.width = Math.min(gameSize.width, this.mapSize.width);
+            gameSize.height = Math.min(gameSize.height, this.mapSize.height);
+        }
+
         // The performance shows us that having a game size bigger than its real size causes many lags and bad game performance.
         // So we apply this condition: if the game size is greater than the real size, we don't zoom through the canvas.
         // To zoom in and out, we use the camera. The zoom is calculated using the optimal zoom level.
@@ -87,7 +108,13 @@ export class WaScaleManager {
             // In the camera-zoom branch, keep the DOM and canvas layers on the same display scale.
             // The scale manager only compensates for DPR here; the gameplay zoom is fully handled by the camera.
             this.scaleManager.setZoom(1 / devicePixelRatio);
-            camera?.setZoom(zoom);
+            // Never let the map be zoomed out further than fitting entirely on screen. Computed
+            // directly here (not via zoomModifier/maxZoomOut) using the SAME realSize already
+            // computed above, so there's no risk of it drifting from what's actually being applied.
+            const minZoomToFitMap = this.mapSize
+                ? Math.min(realSize.width / this.mapSize.width, realSize.height / this.mapSize.height)
+                : 0;
+            camera?.setZoom(Math.max(zoom, minZoomToFitMap));
         }
 
         // Note: onResize will be called twice (once here and once in Game.ts), but we have no better way.

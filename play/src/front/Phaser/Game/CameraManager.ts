@@ -135,6 +135,7 @@ export class CameraManager extends Phaser.Events.EventEmitter {
         });
 
         // Set zoom out to the maximum possible value
+        this.waScaleManager.setMapSize(this.mapSize.width, this.mapSize.height);
         this.updateMaxZoomOut();
 
         this.scene.game.events.on(WaScaleManagerEvent.ZoomChanged, this.onZoomChanged);
