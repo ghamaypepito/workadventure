@@ -47,9 +47,6 @@
     import { mapEditorSideBarWidthStore } from "./MapEditor/MapEditorSideBarWidthStore";
     import ActionBar from "./ActionBar/ActionBar.svelte";
     import ActionBarButton from "./ActionBar/ActionBarButton.svelte";
-    import MeetingViewToggle from "./ActionBar/MeetingViewToggle.svelte";
-    import CamerasContainer from "./EmbedScreens/CamerasContainer.svelte";
-    import { meetingViewStore } from "../Stores/MeetingViewStore";
 
     import HelpWebRtcSettingsPopup from "./HelpSettings/HelpWebRtcSettingsPopup.svelte";
     import HelpNotificationSettingsPopup from "./HelpSettings/HelpNotificationSettingPopup.svelte";
@@ -252,14 +249,6 @@
     {#if $modalVisibilityStore}
         <div class="bg-black/60 w-full h-full fixed start-0 end-0"></div>
     {/if}
-
-    {#if $meetingViewStore}
-        <!-- Meeting view: covers the map with a grid of everyone currently in proximity with you. -->
-        <div class="w-full h-full fixed start-0 end-0 z-[300] bg-[#1c2a41] flex items-center justify-center p-4">
-            <CamerasContainer oneLineMaxHeight={200} isOnOneLine={false} oneLineMode="horizontal" />
-        </div>
-    {/if}
-    <MeetingViewToggle />
 
     {#if $highlightedEmbedScreen && $highlightFullScreen}
         <div class="w-full h-full fixed start-0 end-0 z-[310]">

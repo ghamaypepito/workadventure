@@ -2,8 +2,6 @@ import type { BaseTranslation } from "../i18n-types";
 
 const actionbar: BaseTranslation = {
     understand: "Got it!",
-    mapView: "Map view",
-    meetingView: "Meeting view",
     edit: "Edit",
     cancel: "Cancel",
     close: "Close",

@@ -3,8 +3,6 @@ import type { DeepPartial } from "../DeepPartial";
 
 const actionbar: DeepPartial<Translation["actionbar"]> = {
     understand: "知道了！",
-    mapView: "Map view",
-    meetingView: "Meeting view",
     edit: "编辑",
     cancel: "取消",
     close: "关闭",
