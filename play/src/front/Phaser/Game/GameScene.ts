@@ -1613,6 +1613,7 @@ export class GameScene extends DirtyScene {
     public onResize(): void {
         super.onResize();
         this.reposition(true);
+        this.cameraManager?.updateMaxZoomOut();
 
         this.throttledSendViewportToServer_();
     }

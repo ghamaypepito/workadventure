@@ -135,12 +135,23 @@ export class CameraManager extends Phaser.Events.EventEmitter {
         });
 
         // Set zoom out to the maximum possible value
+        this.updateMaxZoomOut();
+
+        this.scene.game.events.on(WaScaleManagerEvent.ZoomChanged, this.onZoomChanged);
+    }
+
+    /**
+     * Recomputes the zoom-out cap from the map's dimensions and the CURRENT viewport size.
+     * This was previously only ever computed once, in the constructor - if the browser window
+     * was resized afterward, the cap kept using the stale viewport size it was first computed
+     * with, letting the map be zoomed out further than intended (or not far enough) depending on
+     * how the window size changed. Call this from GameScene.onResize() to keep it accurate.
+     */
+    public updateMaxZoomOut(): void {
         this.waScaleManager.maxZoomOut = this.waScaleManager.getTargetZoomModifierFor(
             this.mapSize.width,
             this.mapSize.height,
         );
-
-        this.scene.game.events.on(WaScaleManagerEvent.ZoomChanged, this.onZoomChanged);
     }
 
     private readonly onZoomChanged = (): void => {
