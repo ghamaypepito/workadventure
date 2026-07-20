@@ -48,6 +48,7 @@
     import ActionBar from "./ActionBar/ActionBar.svelte";
     import ActionBarButton from "./ActionBar/ActionBarButton.svelte";
     import MeetingViewToggle from "./ActionBar/MeetingViewToggle.svelte";
+    import CamerasContainer from "./EmbedScreens/CamerasContainer.svelte";
     import { meetingViewStore } from "../Stores/MeetingViewStore";
 
     import HelpWebRtcSettingsPopup from "./HelpSettings/HelpWebRtcSettingsPopup.svelte";
@@ -253,13 +254,10 @@
     {/if}
 
     {#if $meetingViewStore}
-        <!-- Meeting view: opaque backdrop behind the map, and blocks clicks from reaching the
-             canvas underneath. The actual video grid is the SAME PresentationLayout instance
-             used for the normal floating call strip - forcing isOnOneLine to false (see
-             VideoLayoutStore.ts) makes it expand to fill the screen on its own, rather than
-             spawning a second, separate CamerasContainer here (which doesn't work: streams only
-             render into whichever CamerasContainer instance was already handling them). -->
-        <div class="w-full h-full fixed start-0 end-0 z-[300] bg-[#1c2a41] pointer-events-auto"></div>
+        <!-- Meeting view: covers the map with a grid of everyone currently in proximity with you. -->
+        <div class="w-full h-full fixed start-0 end-0 z-[300] bg-[#1c2a41] flex items-center justify-center p-4">
+            <CamerasContainer oneLineMaxHeight={200} isOnOneLine={false} oneLineMode="horizontal" />
+        </div>
     {/if}
     <MeetingViewToggle />
 
