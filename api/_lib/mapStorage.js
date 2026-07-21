@@ -1,4 +1,4 @@
-const MAP_STORAGE_URL = 'https://map-storage-production.up.railway.app';
+const MAP_STORAGE_URL = 'https://map-storage-production-4cf3.up.railway.app';
 const MAP_STORAGE_TOKEN = process.env.MAP_STORAGE_API_TOKEN;
 const WAM_PATH = '/vings-test/map.wam';
 

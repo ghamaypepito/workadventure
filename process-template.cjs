@@ -3,10 +3,10 @@ const fs = require('fs');
 const indexPath = 'play/dist/public/index.html';
 let html = fs.readFileSync(indexPath, 'utf8');
 
-const PLAY_URL = 'https://vings-workplace.vercel.app';
-const PUSHER_URL = 'https://play-production-7ae3.up.railway.app';
-const BACK_URL = 'https://back-production-76cc.up.railway.app';
-const MAP_STORAGE_URL = 'https://map-storage-production.up.railway.app';
+const PLAY_URL = 'https://pxlcode-workplace.vercel.app';
+const PUSHER_URL = 'https://play-production-5dcd.up.railway.app';
+const BACK_URL = 'https://back-production-9668.up.railway.app';
+const MAP_STORAGE_URL = 'https://map-storage-production-4cf3.up.railway.app';
 
 // Inject window.env config (replaces server-side Mustache {{{ script }}} block)
 const windowEnv = {
@@ -90,7 +90,7 @@ const windowEnvJs = `window.env = ${JSON.stringify(windowEnv)};\nwindow.capabili
 html = html.replace(/\{\{\{[^}]*script[^}]*\}\}\}/g, windowEnvJs);
 
 // Set meta variables
-html = html.replace(/\{\{ title \}\}/g, 'WorkAdventure - Vings Workplace');
+html = html.replace(/\{\{ title \}\}/g, 'WorkAdventure - Pxlcode Hub');
 html = html.replace(/\{\{ description \}\}/g, 'A collaborative virtual office presented as a 16-bit RPG video game');
 html = html.replace(/\{\{ author \}\}/g, 'WorkAdventure');
 html = html.replace(/\{\{ provider \}\}/g, 'WorkAdventure');
