@@ -2,7 +2,8 @@ const crypto = require('crypto');
 const { requireUser } = require('../_lib/requireUser');
 const { withRedis } = require('../_lib/redis');
 const { REDIS_URL } = require('../_lib/admin');
-const { listKnownMembers, heartbeat } = require('../_lib/presence');
+const { listKnownMembers, heartbeat, setLastRoom, getLastRoom } = require('../_lib/presence');
+const { fetchWam, resolveRoomCoordinates } = require('../_lib/mapStorage');
 
 const PENDING_KEY = 'wa:pending-admission';
 const MAX_AGE_MS = 10 * 60 * 1000; // ignore stale requests older than 10 minutes
@@ -174,6 +175,51 @@ async function heartbeatRoute(req, res) {
     res.end(JSON.stringify({ success: true }));
 }
 
+// Requires a signed-in (non-guest) user. Persists their current named zone so it can be
+// restored as their spawn point next login, instead of always showing the seat-picker.
+async function roomPost(req, res) {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const parsed = await readBody(req);
+    if (parsed === null || !parsed.room) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing room' }));
+        return;
+    }
+
+    await setLastRoom(user.email, parsed.room);
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true }));
+}
+
+// Requires a signed-in (non-guest) user. Returns their persisted last room, resolved to
+// teleport-target coordinates via the current map (so a rename/move of the room since
+// they last logged out doesn't silently teleport them to a stale position).
+async function roomGet(req, res) {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const room = await getLastRoom(user.email);
+    if (!room) {
+        res.statusCode = 200;
+        res.end(JSON.stringify({ room: null, x: null, y: null }));
+        return;
+    }
+
+    const wam = await fetchWam();
+    const coords = resolveRoomCoordinates(wam, room);
+    if (!coords) {
+        // The room was renamed or removed since this user last logged out.
+        res.statusCode = 200;
+        res.end(JSON.stringify({ room: null, x: null, y: null }));
+        return;
+    }
+
+    res.statusCode = 200;
+    res.end(JSON.stringify({ room, x: coords.x, y: coords.y }));
+}
+
 // Resolves a conversation key built from WA player uuids (e.g. "uuidA|uuidB") into one built from
 // the accounts' emails where known, falling back to the raw uuid for any segment that has no
 // registered mapping (e.g. a guest, or a user who hasn't triggered identity registration yet).
@@ -287,6 +333,9 @@ module.exports = async (req, res) => {
             await knownMembers(req, res);
         } else if (segment === 'heartbeat') {
             await heartbeatRoute(req, res);
+        } else if (segment === 'room') {
+            if (req.method === 'POST') await roomPost(req, res);
+            else await roomGet(req, res);
         } else {
             res.statusCode = 404;
             res.end(JSON.stringify({ error: 'Not found' }));
