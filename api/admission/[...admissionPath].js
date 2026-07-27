@@ -137,21 +137,22 @@ async function pending(req, res) {
         const requestId = raw[i];
         try {
             const data = JSON.parse(raw[i + 1]);
-            if (data.status === 'pending' && Date.now() - data.ts >= MAX_AGE_MS) {
-                // Reap stale/abandoned entries opportunistically, as a side effect of noticing
-                // them here, so the hash doesn't grow unbounded from untargeted/expired requests.
+            // Reap opportunistically by age alone, regardless of status: an entry that
+            // reached 'approved' but was never consumed (e.g. the guest closed their tab
+            // before polling status() again) would otherwise sit forever, since it matches
+            // neither the pending-and-stale reap condition nor the pending-and-fresh
+            // requests-list condition below.
+            if (Date.now() - data.ts >= MAX_AGE_MS) {
                 staleRequestIds.push(requestId);
                 continue;
             }
-            if (
-                data.status === 'pending' &&
-                Date.now() - data.ts < MAX_AGE_MS &&
-                data.target === user.email.toLowerCase()
-            ) {
+            if (data.status === 'pending' && data.target === user.email.toLowerCase()) {
                 requests.push({ requestId, name: data.name, ts: data.ts });
             }
         } catch {
-            // skip malformed entry
+            // Malformed entry: it can never be parsed successfully, so it would otherwise
+            // persist forever. Reap it here too.
+            staleRequestIds.push(requestId);
         }
     }
 
