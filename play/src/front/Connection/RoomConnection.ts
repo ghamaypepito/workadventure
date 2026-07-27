@@ -1512,7 +1512,7 @@ export class RoomConnection implements RoomConnection {
         });
     }
 
-    public emitSocialSignalRequest(receiverUserUuid: string, kind: "wave" | "ping", receiverUserId?: number): void {
+    public emitSocialSignalRequest(receiverUserUuid: string, kind: string, receiverUserId?: number): void {
         this.send({
             message: {
                 $case: "socialSignalRequestMessage",
