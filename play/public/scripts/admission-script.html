@@ -159,7 +159,7 @@
                                         await fetch('/api/admission/approve', {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ requestId: first.requestId }),
+                                            body: JSON.stringify({ requestId: first.requestId, room: currentZone }),
                                         });
                                         if (currentBanner) {
                                             currentBanner.close();
@@ -208,8 +208,55 @@
         }
 
         // Recognized (non-guest) user: enters immediately, no wait.
-        // Offer them the seat picker so they can choose where to sit.
-        await offerSeatPicker();
+
+        const KNOWN_ZONES = [
+            'Special rooom 01',
+            'Conference 01',
+            'Conference 02',
+            'Demo rooom 1',
+            'Demo Room 2',
+            'Demo Room 3',
+        ];
+        let currentZone = null;
+        KNOWN_ZONES.forEach((zoneName) => {
+            WA.room.onEnterZone(zoneName, () => {
+                currentZone = zoneName;
+            });
+            WA.room.onLeaveZone(zoneName, () => {
+                if (currentZone === zoneName) currentZone = null;
+            });
+        });
+
+        // Keep this user's presence fresh in the known-members list (see PRESENCE_TTL_SECONDS
+        // in api/_lib/presence.js — must heartbeat more often than that TTL).
+        setInterval(() => {
+            fetch('/api/admission/heartbeat', { method: 'POST' }).catch((e) =>
+                console.error('[admission] heartbeat failed', e),
+            );
+        }, 20000);
+        fetch('/api/admission/heartbeat', { method: 'POST' }).catch((e) =>
+            console.error('[admission] initial heartbeat failed', e),
+        );
+
+        // Persist the current zone on the way out, so it can be restored next login.
+        window.addEventListener('beforeunload', () => {
+            if (currentZone) {
+                navigator.sendBeacon(
+                    '/api/admission/room',
+                    new Blob([JSON.stringify({ room: currentZone })], { type: 'application/json' }),
+                );
+            }
+        });
+
+        // If we have a persisted last room, spawn there and skip the seat-picker entirely.
+        // Otherwise (first-ever login), fall back to today's seat-picker behavior.
+        const lastRoomRes = await fetch('/api/admission/room');
+        const lastRoom = await lastRoomRes.json();
+        if (lastRoom.room && lastRoom.x !== null && lastRoom.y !== null) {
+            await WA.player.teleport(lastRoom.x, lastRoom.y);
+        } else {
+            await offerSeatPicker();
+        }
 
         // Let them reopen the seat picker anytime from the menu, not just once at join
         // (e.g. if they skipped it, or want to switch desks later).
@@ -217,7 +264,8 @@
             offerSeatPicker().catch((e) => console.error('[admission] seat picker error', e));
         });
 
-        // Recognized users also watch for guests waiting to be let in.
+        // Recognized users also watch for guests waiting to be let in (only requests
+        // targeted at them, per the pending() filter in api/admission/[...admissionPath].js).
         pollPendingAdmissions();
     });
 })();
