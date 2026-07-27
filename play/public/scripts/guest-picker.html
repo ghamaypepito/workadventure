@@ -49,6 +49,12 @@
     let members = [];
     let selected = null;
     let currentRequestId = null;
+    // True for the duration of an in-flight POST /api/admission/request. Guards against a
+    // second Notify click, or a new member selection, firing another request while one is
+    // still outstanding - the in-flight request has no requestId yet (it only gets one once
+    // the POST resolves), so cancelCurrent() has nothing to cancel and the server-side entry
+    // would otherwise be orphaned forever (see Issue A).
+    let sendInFlight = false;
     // Monotonically increasing generation counter. Each poll closure captures the
     // generation value at schedule time; after its await resolves, it checks the
     // generation is still current before acting or scheduling the next poll. This is
@@ -109,8 +115,10 @@
             if (m.online) {
                 btn.addEventListener('click', () => {
                     selected = m.email;
-                    notifyBtn.disabled = false;
-                    notifyBtn.classList.add('enabled');
+                    if (!sendInFlight) {
+                        notifyBtn.disabled = false;
+                        notifyBtn.classList.add('enabled');
+                    }
                     renderList();
                 });
             }
@@ -161,26 +169,40 @@
     }
 
     async function sendRequestTo(targetEmail) {
-        await cancelCurrent();
-        const myGeneration = ++generation;
+        if (sendInFlight) return;
+        sendInFlight = true;
+        notifyBtn.disabled = true;
+        notifyBtn.classList.remove('enabled');
         try {
-            const res = await fetch('/api/admission/request', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: guestName, targetEmail }),
-            });
-            if (myGeneration !== generation) return;
-            if (!res.ok) throw new Error('Could not send request');
-            const data = await res.json();
-            if (myGeneration !== generation) return;
-            currentRequestId = data.requestId;
-            showWaiting(targetEmail);
-            schedulePoll(myGeneration);
-        } catch (e) {
-            if (myGeneration !== generation) return;
-            showError('Could not notify ' + targetEmail + '. Check your connection and try again.', () =>
-                sendRequestTo(targetEmail),
-            );
+            await cancelCurrent();
+            const myGeneration = ++generation;
+            try {
+                const res = await fetch('/api/admission/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: guestName, targetEmail }),
+                });
+                if (myGeneration !== generation) return;
+                if (!res.ok) throw new Error('Could not send request');
+                const data = await res.json();
+                if (myGeneration !== generation) return;
+                currentRequestId = data.requestId;
+                showWaiting(targetEmail);
+                schedulePoll(myGeneration);
+            } catch (e) {
+                if (myGeneration !== generation) return;
+                showError('Could not notify ' + targetEmail + '. Check your connection and try again.', () =>
+                    sendRequestTo(targetEmail),
+                );
+            }
+        } finally {
+            sendInFlight = false;
+            // Re-enable the button only if a member is still selected (showWaiting hides the
+            // picker entirely on success, so this is effectively a no-op in that case).
+            if (selected) {
+                notifyBtn.disabled = false;
+                notifyBtn.classList.add('enabled');
+            }
         }
     }
 
@@ -228,7 +250,7 @@
 
     searchEl.addEventListener('input', renderList);
     notifyBtn.addEventListener('click', () => {
-        if (selected) sendRequestTo(selected);
+        if (selected && !sendInFlight) sendRequestTo(selected);
     });
 
     WA.onInit().then(loadMembers);
