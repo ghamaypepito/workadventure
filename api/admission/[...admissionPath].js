@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { requireUser } = require('../_lib/requireUser');
 const { withRedis } = require('../_lib/redis');
 const { REDIS_URL } = require('../_lib/admin');
+const { listKnownMembers, heartbeat } = require('../_lib/presence');
 
 const PENDING_KEY = 'wa:pending-admission';
 const MAX_AGE_MS = 10 * 60 * 1000; // ignore stale requests older than 10 minutes
@@ -155,6 +156,24 @@ async function identity(req, res) {
     res.end(JSON.stringify({ success: true }));
 }
 
+// No auth required: guests need this to populate the "who are you here to see?" picker
+// before they have any session at all.
+async function knownMembers(req, res) {
+    const members = await listKnownMembers();
+    res.statusCode = 200;
+    res.end(JSON.stringify({ members }));
+}
+
+// Requires a signed-in (non-guest) user. Called periodically by their client to stay
+// "Active now" in the known-members list (see PRESENCE_TTL_SECONDS in presence.js).
+async function heartbeatRoute(req, res) {
+    const user = await requireUser(req, res);
+    if (!user) return;
+    await heartbeat(user.email);
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true }));
+}
+
 // Resolves a conversation key built from WA player uuids (e.g. "uuidA|uuidB") into one built from
 // the accounts' emails where known, falling back to the raw uuid for any segment that has no
 // registered mapping (e.g. a guest, or a user who hasn't triggered identity registration yet).
@@ -264,6 +283,10 @@ module.exports = async (req, res) => {
             else await chatHistoryGet(req, res);
         } else if (segment === 'identity') {
             await identity(req, res);
+        } else if (segment === 'known-members') {
+            await knownMembers(req, res);
+        } else if (segment === 'heartbeat') {
+            await heartbeatRoute(req, res);
         } else {
             res.statusCode = 404;
             res.end(JSON.stringify({ error: 'Not found' }));
