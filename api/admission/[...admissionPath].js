@@ -132,10 +132,17 @@ async function pending(req, res) {
     });
 
     const requests = [];
+    const staleRequestIds = [];
     for (let i = 0; i < raw.length; i += 2) {
         const requestId = raw[i];
         try {
             const data = JSON.parse(raw[i + 1]);
+            if (data.status === 'pending' && Date.now() - data.ts >= MAX_AGE_MS) {
+                // Reap stale/abandoned entries opportunistically, as a side effect of noticing
+                // them here, so the hash doesn't grow unbounded from untargeted/expired requests.
+                staleRequestIds.push(requestId);
+                continue;
+            }
             if (
                 data.status === 'pending' &&
                 Date.now() - data.ts < MAX_AGE_MS &&
@@ -146,6 +153,12 @@ async function pending(req, res) {
         } catch {
             // skip malformed entry
         }
+    }
+
+    if (staleRequestIds.length > 0) {
+        await withRedis(REDIS_URL, async (client) => {
+            await client.command('HDEL', PENDING_KEY, ...staleRequestIds);
+        });
     }
 
     res.statusCode = 200;
