@@ -71,15 +71,25 @@ async function status(req, res) {
 
     const data = JSON.parse(raw);
 
+    if (data.status !== 'approved') {
+        res.statusCode = 200;
+        res.end(JSON.stringify({ status: data.status }));
+        return;
+    }
+
     // Once the waiting client has seen "approved", consume the entry so it can't be reused.
-    if (data.status === 'approved') {
-        await withRedis(REDIS_URL, async (client) => {
-            await client.command('HDEL', PENDING_KEY, requestId);
-        });
+    await withRedis(REDIS_URL, async (client) => {
+        await client.command('HDEL', PENDING_KEY, requestId);
+    });
+
+    let coords = null;
+    if (data.room) {
+        const wam = await fetchWam();
+        coords = resolveRoomCoordinates(wam, data.room);
     }
 
     res.statusCode = 200;
-    res.end(JSON.stringify({ status: data.status }));
+    res.end(JSON.stringify({ status: 'approved', x: coords ? coords.x : null, y: coords ? coords.y : null }));
 }
 
 // Requires a signed-in (non-guest) user. Only returns requests targeted at this caller
@@ -113,7 +123,9 @@ async function pending(req, res) {
     res.end(JSON.stringify({ requests }));
 }
 
-// Requires a signed-in (non-guest) user.
+// Requires a signed-in (non-guest) user. Optionally records the approver's current room
+// (their client passes its locally-tracked zone, see admission-script.html) so the guest
+// can be spawned into the same room/area as whoever let them in.
 async function approve(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
@@ -131,6 +143,7 @@ async function approve(req, res) {
         const data = JSON.parse(raw);
         data.status = 'approved';
         data.approvedBy = user.email;
+        if (parsed.room) data.room = parsed.room;
         await client.command('HSET', PENDING_KEY, parsed.requestId, JSON.stringify(data));
         return true;
     });
