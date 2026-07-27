@@ -138,7 +138,8 @@
         const wrap = document.createElement('div');
         wrap.className = 'waiting';
         wrap.innerHTML =
-            '<div>Waiting for ' + targetEmail + '&hellip;</div>';
+            '<div>Waiting for ' + targetEmail + '&hellip;</div>' +
+            '<div id="pollNotice" class="error" style="margin-top: 0.5rem; font-size: 0.8rem;"></div>';
         const chooseBtn = document.createElement('button');
         chooseBtn.className = 'secondary';
         chooseBtn.textContent = 'Choose someone else';
@@ -148,6 +149,15 @@
         });
         wrap.appendChild(chooseBtn);
         statusEl.appendChild(wrap);
+    }
+
+    // Sets (or clears) a small inline notice below the "Waiting for X..." text, without
+    // touching the rest of the waiting UI. Used for transient poll errors so a network blip
+    // doesn't blow away the waiting state (see Issue B) - only genuinely terminal states use
+    // showError's full-replace flow.
+    function setPollNotice(message) {
+        const notice = document.getElementById('pollNotice');
+        if (notice) notice.textContent = message || '';
     }
 
     async function cancelCurrent() {
@@ -240,11 +250,18 @@
                 return;
             }
 
-            // still pending
+            // still pending - clear any inline notice left over from a prior failed poll
+            // attempt, then keep polling.
+            setPollNotice('');
             schedulePoll(myGeneration);
         } catch (e) {
             if (myGeneration !== generation) return;
-            showError('Lost connection while waiting for a response.', () => schedulePoll(myGeneration));
+            // Transient error (e.g. a network blip, or the exact map-storage outage scenario
+            // status() is built to survive server-side): never stop polling here and never
+            // destroy the waiting UI. The loop should only ever stop because of generation
+            // staleness, or a genuinely terminal status (not_found/approved) handled above.
+            setPollNotice('Having trouble checking for a response - still waiting...');
+            schedulePoll(myGeneration);
         }
     }
 
