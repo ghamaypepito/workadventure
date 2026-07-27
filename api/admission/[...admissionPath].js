@@ -166,16 +166,29 @@ async function approve(req, res) {
         return;
     }
 
+    let forbidden = false;
     const updated = await withRedis(REDIS_URL, async (client) => {
         const raw = await client.command('HGET', PENDING_KEY, parsed.requestId);
         if (!raw) return false;
         const data = JSON.parse(raw);
+        // Only the person the guest actually picked may admit them - otherwise any signed-in
+        // user who obtains a requestId could admit a guest into any room.
+        if (data.target !== user.email.toLowerCase()) {
+            forbidden = true;
+            return false;
+        }
         data.status = 'approved';
         data.approvedBy = user.email;
         if (parsed.room) data.room = parsed.room;
         await client.command('HSET', PENDING_KEY, parsed.requestId, JSON.stringify(data));
         return true;
     });
+
+    if (forbidden) {
+        res.statusCode = 403;
+        res.end(JSON.stringify({ error: 'You are not the target of this request' }));
+        return;
+    }
 
     if (!updated) {
         res.statusCode = 404;
