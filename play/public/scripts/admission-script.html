@@ -22,119 +22,6 @@
         }
     }
 
-    async function fetchKnownMembers() {
-        const res = await fetch('/api/admission/known-members');
-        const { members } = await res.json();
-        return members;
-    }
-
-    function renderPicker(members, onSelect) {
-        const overlay = document.createElement('div');
-        overlay.id = 'guest-picker-overlay';
-        overlay.style.cssText =
-            'position:fixed;inset:0;z-index:99999;background:#0f172a;color:#e2e8f0;display:flex;' +
-            'flex-direction:column;align-items:center;justify-content:center;font-family:system-ui,sans-serif;padding:2rem;';
-        overlay.innerHTML =
-            '<h1 style="font-size:1.5rem;margin-bottom:0.25rem;">Who are you here to see?</h1>' +
-            '<p style="color:#94a3b8;margin-bottom:1.5rem;">Selected member will let you in</p>' +
-            '<input id="guest-picker-search" placeholder="Search members" style="width:100%;max-width:340px;' +
-            'padding:0.6rem 0.9rem;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;margin-bottom:1rem;">' +
-            '<div id="guest-picker-list" style="width:100%;max-width:340px;max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:0.4rem;"></div>' +
-            '<button id="guest-picker-notify" disabled style="margin-top:1.25rem;width:100%;max-width:340px;' +
-            'padding:0.75rem;border-radius:8px;border:none;background:#334155;color:#64748b;font-weight:600;cursor:not-allowed;">Notify member</button>';
-        document.body.appendChild(overlay);
-
-        const listEl = overlay.querySelector('#guest-picker-list');
-        const searchEl = overlay.querySelector('#guest-picker-search');
-        const notifyBtn = overlay.querySelector('#guest-picker-notify');
-        let selected = null;
-
-        function renderList(filter) {
-            listEl.innerHTML = '';
-            members
-                .filter((m) => m.email.toLowerCase().includes(filter.toLowerCase()))
-                .sort((a, b) => Number(b.online) - Number(a.online))
-                .forEach((m) => {
-                    const row = document.createElement('div');
-                    row.textContent = m.email + (m.online ? ' — Active now' : ' — Offline');
-                    row.style.cssText =
-                        'padding:0.6rem 0.9rem;border-radius:8px;border:1px solid #334155;' +
-                        (m.online ? 'cursor:pointer;' : 'opacity:0.4;cursor:not-allowed;') +
-                        (selected === m.email ? 'background:#334155;' : 'background:#1e293b;');
-                    if (m.online) {
-                        row.addEventListener('click', () => {
-                            selected = m.email;
-                            notifyBtn.disabled = false;
-                            notifyBtn.style.background = '#10b981';
-                            notifyBtn.style.color = '#0f172a';
-                            notifyBtn.style.cursor = 'pointer';
-                            renderList(searchEl.value);
-                        });
-                    }
-                    listEl.appendChild(row);
-                });
-        }
-        renderList('');
-        searchEl.addEventListener('input', () => renderList(searchEl.value));
-        notifyBtn.addEventListener('click', () => {
-            if (selected) onSelect(selected, overlay);
-        });
-
-        return overlay;
-    }
-
-    async function waitForApproval(name) {
-        WA.controls.disablePlayerControls();
-
-        let currentRequestId = null;
-        let pollTimer = null;
-
-        function stopPolling() {
-            if (pollTimer) clearTimeout(pollTimer);
-        }
-
-        async function sendRequestTo(targetEmail) {
-            stopPolling();
-            const reqRes = await fetch('/api/admission/request', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, targetEmail }),
-            });
-            const { requestId } = await reqRes.json();
-            currentRequestId = requestId;
-            poll();
-        }
-
-        function poll() {
-            pollTimer = setTimeout(async () => {
-                try {
-                    const statusRes = await fetch('/api/admission/status?requestId=' + encodeURIComponent(currentRequestId));
-                    const data = await statusRes.json();
-                    if (data.status === 'approved') {
-                        stopPolling();
-                        pickerOverlay.remove();
-                        if (data.x !== null && data.y !== null) {
-                            await WA.player.teleport(data.x, data.y);
-                        }
-                        WA.controls.restorePlayerControls();
-                        return;
-                    }
-                } catch (e) {
-                    console.error('[admission] poll error', e);
-                }
-                poll();
-            }, 3000);
-        }
-
-        const members = await fetchKnownMembers();
-        const pickerOverlay = renderPicker(members, (targetEmail, overlay) => {
-            sendRequestTo(targetEmail);
-            // Allow picking someone else without waiting for the first target to respond:
-            // re-render with a "choose someone else" affordance is just re-showing the same
-            // picker's search+list, which stays interactive underneath the notify action.
-        });
-    }
-
     async function offerSeatPicker() {
         await WA.nav.openCoWebSite('/scripts/seat-picker.html', true, undefined, 40, 0, true);
     }
@@ -188,9 +75,19 @@
         const user = getUser();
 
         if (!user) {
-            // Guest: no SSO session at all. Hold them until someone admits them.
+            // Guest: no SSO session at all. Show the picker as a co-website (map scripts run
+            // in a hidden iframe, so UI must go through openCoWebSite/openPopup, never direct
+            // DOM injection into this script's own document).
+            WA.controls.disablePlayerControls();
             const name = await WA.player.name;
-            await waitForApproval(name);
+            await WA.nav.openCoWebSite(
+                '/scripts/guest-picker.html?name=' + encodeURIComponent(name),
+                true,
+                undefined,
+                40,
+                0,
+                true,
+            );
             return;
         }
 
