@@ -26,4 +26,13 @@ async function patchWam(operations) {
     return res.json();
 }
 
-module.exports = { fetchWam, patchWam };
+// Resolves a named area (e.g. "Conference 01") from a fetched .wam's areas array into
+// its center coordinates, for teleporting a player there. Returns null if no area with
+// that exact name exists (e.g. the map was edited and the room was renamed/removed).
+function resolveRoomCoordinates(wam, roomName) {
+    const area = wam.areas.find((a) => a.name === roomName);
+    if (!area) return null;
+    return { x: area.x + area.width / 2, y: area.y + area.height / 2 };
+}
+
+module.exports = { fetchWam, patchWam, resolveRoomCoordinates };
