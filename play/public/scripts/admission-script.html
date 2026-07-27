@@ -80,13 +80,18 @@
             // DOM injection into this script's own document).
             WA.controls.disablePlayerControls();
             const name = await WA.player.name;
+            // Unlike seat-picker.html (genuinely optional/skippable, hence closable), the guest
+            // picker must NOT be user-closable: player controls are disabled here and there is
+            // no other way back in if the guest closes it - no menu command, no fallback UI,
+            // and pollPendingAdmissions doesn't apply to guests. Final positional arg is the
+            // closability flag; keep every other argument as-is.
             await WA.nav.openCoWebSite(
                 '/scripts/guest-picker.html?name=' + encodeURIComponent(name),
                 true,
                 undefined,
                 40,
                 0,
-                true,
+                false,
             );
             return;
         }
