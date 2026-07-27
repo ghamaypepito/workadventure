@@ -162,7 +162,11 @@
 
         // If we have a persisted last room, spawn there and skip the seat-picker entirely.
         // Otherwise (first-ever login, or on any failure below), fall back to the safe
-        // default of showing the seat-picker.
+        // default of showing the seat-picker. This whole decision is wrapped in its own
+        // self-contained try/catch (including a nested catch around the fallback
+        // offerSeatPicker() call) so that no failure here - not the room lookup, not either
+        // offerSeatPicker() call - can ever escape and prevent the unconditional trailer
+        // code below (menu command registration, pollPendingAdmissions) from running.
         try {
             const lastRoomRes = await fetch('/api/admission/room');
             const lastRoom = await lastRoomRes.json();
@@ -173,7 +177,11 @@
             }
         } catch (e) {
             console.error('[admission] last-room lookup failed, falling back to seat picker', e);
-            await offerSeatPicker();
+            try {
+                await offerSeatPicker();
+            } catch (e2) {
+                console.error('[admission] seat picker fallback also failed', e2);
+            }
         }
 
         // Let them reopen the seat picker anytime from the menu, not just once at join
