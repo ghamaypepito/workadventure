@@ -147,12 +147,18 @@
         });
 
         // If we have a persisted last room, spawn there and skip the seat-picker entirely.
-        // Otherwise (first-ever login), fall back to today's seat-picker behavior.
-        const lastRoomRes = await fetch('/api/admission/room');
-        const lastRoom = await lastRoomRes.json();
-        if (lastRoom.room && lastRoom.x !== null && lastRoom.y !== null) {
-            await WA.player.teleport(lastRoom.x, lastRoom.y);
-        } else {
+        // Otherwise (first-ever login, or on any failure below), fall back to the safe
+        // default of showing the seat-picker.
+        try {
+            const lastRoomRes = await fetch('/api/admission/room');
+            const lastRoom = await lastRoomRes.json();
+            if (lastRoom.room && lastRoom.x !== null && lastRoom.y !== null) {
+                await WA.player.teleport(lastRoom.x, lastRoom.y);
+            } else {
+                await offerSeatPicker();
+            }
+        } catch (e) {
+            console.error('[admission] last-room lookup failed, falling back to seat picker', e);
             await offerSeatPicker();
         }
 
@@ -164,6 +170,7 @@
 
         // Recognized users also watch for guests waiting to be let in (only requests
         // targeted at them, per the pending() filter in api/admission/[...admissionPath].js).
+        // Run this unconditionally regardless of which branch above ran or whether it errored.
         pollPendingAdmissions();
     });
 })();
