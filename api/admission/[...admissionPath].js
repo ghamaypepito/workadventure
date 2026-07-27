@@ -49,6 +49,30 @@ async function request(req, res) {
     res.end(JSON.stringify({ requestId }));
 }
 
+// No auth required: called by a guest picking a different target before the first one
+// has responded. Only removes the entry if it's still pending (never cancels one that's
+// already been approved).
+async function cancel(req, res) {
+    const parsed = await readBody(req);
+    if (parsed === null || !parsed.requestId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing requestId' }));
+        return;
+    }
+
+    await withRedis(REDIS_URL, async (client) => {
+        const raw = await client.command('HGET', PENDING_KEY, parsed.requestId);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (data.status === 'pending') {
+            await client.command('HDEL', PENDING_KEY, parsed.requestId);
+        }
+    });
+
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true }));
+}
+
 // No auth required: the waiting guest polls this.
 async function status(req, res) {
     const url = new URL(req.url, `http://${req.headers.host}`);
@@ -343,6 +367,8 @@ module.exports = async (req, res) => {
             await request(req, res);
         } else if (segment === 'status') {
             await status(req, res);
+        } else if (segment === 'cancel') {
+            await cancel(req, res);
         } else if (segment === 'pending') {
             await pending(req, res);
         } else if (segment === 'approve') {
