@@ -101,16 +101,21 @@ async function status(req, res) {
         return;
     }
 
-    // Once the waiting client has seen "approved", consume the entry so it can't be reused.
-    await withRedis(REDIS_URL, async (client) => {
-        await client.command('HDEL', PENDING_KEY, requestId);
-    });
-
+    // Resolve coordinates (which can throw, e.g. on a map-storage outage) BEFORE consuming
+    // the entry. If fetchWam() throws, we must not have already deleted the entry - otherwise
+    // the guest's next poll (3s later) would get "not_found" instead of a fresh chance to
+    // resolve once the outage clears, permanently destroying a legitimate approval.
     let coords = null;
     if (data.room) {
         const wam = await fetchWam();
         coords = resolveRoomCoordinates(wam, data.room);
     }
+
+    // Now that coordinates are resolved (or there was no room to resolve), consume the
+    // entry so it can't be reused.
+    await withRedis(REDIS_URL, async (client) => {
+        await client.command('HDEL', PENDING_KEY, requestId);
+    });
 
     res.statusCode = 200;
     res.end(JSON.stringify({ status: 'approved', x: coords ? coords.x : null, y: coords ? coords.y : null }));
