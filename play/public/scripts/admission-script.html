@@ -119,6 +119,15 @@
         KNOWN_ZONES.forEach((zoneName) => {
             WA.room.onEnterZone(zoneName, () => {
                 currentZone = zoneName;
+                // Persist the room right here, as the primary mechanism - beforeunload is
+                // unreliable (doesn't fire on mobile backgrounding, crashes, etc.) and is
+                // kept below only as a harmless backstop. Fire-and-forget: don't block
+                // zone-entry handling on the network round-trip.
+                fetch('/api/admission/room', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ room: zoneName }),
+                }).catch((e) => console.error('[admission] failed to persist last room', e));
             });
             WA.room.onLeaveZone(zoneName, () => {
                 if (currentZone === zoneName) currentZone = null;
