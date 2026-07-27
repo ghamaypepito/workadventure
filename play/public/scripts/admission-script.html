@@ -139,6 +139,8 @@
         await WA.nav.openCoWebSite('/scripts/seat-picker.html', true, undefined, 40, 0, true);
     }
 
+    let currentZone = null;
+
     async function pollPendingAdmissions() {
         let currentBanner = null;
         const check = async () => {
@@ -217,7 +219,6 @@
             'Demo Room 2',
             'Demo Room 3',
         ];
-        let currentZone = null;
         KNOWN_ZONES.forEach((zoneName) => {
             WA.room.onEnterZone(zoneName, () => {
                 currentZone = zoneName;
