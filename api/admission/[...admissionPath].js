@@ -230,6 +230,14 @@ async function identity(req, res) {
 
     await withRedis(REDIS_URL, async (client) => {
         await client.command('SET', `wa:uuid-email:${parsed.uuid}`, user.email, 'EX', String(IDENTITY_TTL_SECONDS));
+        // Reverse index: lets the channels feature resolve "which currently-connected
+        // player uuid(s) belong to this email" to deliver an instant socket signal
+        // (see api/channels/[...channelsPath].js's online-member-uuids route). Same TTL
+        // and "last write wins" semantics as the forward mapping above — if a user has
+        // multiple simultaneous sessions, only the most recently registered one receives
+        // instant signals, which is an accepted limitation (they still see the channel's
+        // correct unread count next time they open it, computed server-side from Redis).
+        await client.command('SET', `wa:email-uuid:${user.email.toLowerCase()}`, parsed.uuid, 'EX', String(IDENTITY_TTL_SECONDS));
     });
 
     res.statusCode = 200;
