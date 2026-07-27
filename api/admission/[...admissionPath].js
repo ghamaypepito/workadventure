@@ -24,9 +24,9 @@ async function readBody(req) {
 // No auth required: called by a guest who has no session at all.
 async function request(req, res) {
     const parsed = await readBody(req);
-    if (parsed === null) {
+    if (parsed === null || !parsed.targetEmail) {
         res.statusCode = 400;
-        res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+        res.end(JSON.stringify({ error: 'Missing name or targetEmail' }));
         return;
     }
     const requestId = crypto.randomBytes(12).toString('hex');
@@ -36,7 +36,12 @@ async function request(req, res) {
             'HSET',
             PENDING_KEY,
             requestId,
-            JSON.stringify({ name: parsed.name || 'Guest', ts: Date.now(), status: 'pending' }),
+            JSON.stringify({
+                name: parsed.name || 'Guest',
+                target: parsed.targetEmail.toLowerCase(),
+                ts: Date.now(),
+                status: 'pending',
+            }),
         );
     });
 
@@ -77,7 +82,8 @@ async function status(req, res) {
     res.end(JSON.stringify({ status: data.status }));
 }
 
-// Requires a signed-in (non-guest) user.
+// Requires a signed-in (non-guest) user. Only returns requests targeted at this caller
+// (previously returned every pending request to every recognized user).
 async function pending(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
@@ -91,7 +97,11 @@ async function pending(req, res) {
         const requestId = raw[i];
         try {
             const data = JSON.parse(raw[i + 1]);
-            if (data.status === 'pending' && Date.now() - data.ts < MAX_AGE_MS) {
+            if (
+                data.status === 'pending' &&
+                Date.now() - data.ts < MAX_AGE_MS &&
+                data.target === user.email.toLowerCase()
+            ) {
                 requests.push({ requestId, name: data.name, ts: data.ts });
             }
         } catch {
