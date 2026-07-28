@@ -16,12 +16,18 @@
     import { analyticsClient } from "../../../Administration/AnalyticsClient";
     import type { UserProviderMerger } from "../../UserProviderMerger/UserProviderMerger";
     import { IconForbid, IconDots, IconCamera, IconMapPin, IconUserPlus, IconHandStop } from "@wa-icons";
+    import AddUserToChannelModal from "../AddUserToChannelModal.svelte";
 
     interface Props {
         user: ChatUser;
     }
 
     let { user }: Props = $props();
+
+    let showAddToChannel = $state(false);
+
+    const canManageChannels =
+        typeof window !== "undefined" && (window as unknown as { __waIsAdmin?: boolean }).__waIsAdmin === true;
 
     let popoversElement: HTMLDivElement | undefined = $state();
 
@@ -348,6 +354,30 @@
                     }}><IconForbid font-size="13" /> {$LL.chat.ban.title()}</span
                 >
             {/if}
+
+            {#if canManageChannels}
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <span
+                    class="add-to-channel wa-dropdown-item text-nowrap flex gap-2 items-center hover:bg-white/10 m-0 p-2 w-full text-sm rounded"
+                    onclick={(event) => {
+                        event.stopPropagation();
+                        showAddToChannel = true;
+                        closeChatUserMenu();
+                    }}
+                >
+                    <IconUserPlus class="w-4" />
+                    Add to channel
+                </span>
+            {/if}
         </div>
     {/if}
 </div>
+
+{#if showAddToChannel}
+    <AddUserToChannelModal
+        userUuid={user.uuid ?? ""}
+        userName={user.username ?? "this user"}
+        onClose={() => (showAddToChannel = false)}
+    />
+{/if}
