@@ -957,6 +957,16 @@ export class GameMapPropertiesListener {
      * Must be called when the GameMapPropertiesListener is no longer needed to prevent memory leaks.
      */
     public destroy(): void {
+        // Reset the zone name shown in the persistent top bar. This store is a module-level
+        // singleton that survives across scenes, so without this reset here, a zone name from
+        // the map this listener was attached to could persist indefinitely once the listener
+        // (and the GameMapFrontWrapper it was watching) goes away - whether that's because of a
+        // normal room transition or a WAM/tileset live-reload (map editor) that rebuilds the
+        // GameMapFrontWrapper and this listener in place, without going through the scene's
+        // create() again. Putting the reset here, in the one place both paths already call,
+        // covers both with a single source of truth.
+        currentZoneNameStore.set(undefined);
+
         // Destroy the areas properties listener
         this.areasPropertiesListener.destroy();
 
