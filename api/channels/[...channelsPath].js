@@ -59,8 +59,19 @@ async function list(req, res, user) {
     res.end(JSON.stringify({ channels }));
 }
 
+function getChannelId(req) {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    return url.searchParams.get('id');
+}
+
 // Requires admin. Renames a channel (identity is by id, so this never breaks references).
-async function rename(req, res, user, channelId) {
+async function rename(req, res, user) {
+    const channelId = getChannelId(req);
+    if (!channelId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing id' }));
+        return;
+    }
     const parsed = await readBody(req);
     if (parsed === null || !parsed.name) {
         res.statusCode = 400;
@@ -78,7 +89,13 @@ async function rename(req, res, user, channelId) {
 }
 
 // Requires admin. Adds/removes members.
-async function members(req, res, user, channelId) {
+async function members(req, res, user) {
+    const channelId = getChannelId(req);
+    if (!channelId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing id' }));
+        return;
+    }
     const parsed = await readBody(req);
     if (parsed === null) {
         res.statusCode = 400;
@@ -97,13 +114,19 @@ async function members(req, res, user, channelId) {
 }
 
 // Requires the caller to be a member of the channel.
-async function messagesGet(req, res, user, channelId) {
+async function messagesGet(req, res, user) {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const channelId = url.searchParams.get('id');
+    if (!channelId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing id' }));
+        return;
+    }
     if (!(await isMember(channelId, user.email))) {
         res.statusCode = 403;
         res.end(JSON.stringify({ error: 'Not a member of this channel' }));
         return;
     }
-    const url = new URL(req.url, `http://${req.headers.host}`);
     const offset = Math.max(0, parseInt(url.searchParams.get('offset'), 10) || 0);
     const limit = Math.min(
         CHAT_HISTORY_MAX_LIMIT,
@@ -114,7 +137,13 @@ async function messagesGet(req, res, user, channelId) {
     res.end(JSON.stringify({ messages, hasMore }));
 }
 
-async function messagesPost(req, res, user, channelId) {
+async function messagesPost(req, res, user) {
+    const channelId = getChannelId(req);
+    if (!channelId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing id' }));
+        return;
+    }
     if (!(await isMember(channelId, user.email))) {
         res.statusCode = 403;
         res.end(JSON.stringify({ error: 'Not a member of this channel' }));
@@ -131,7 +160,13 @@ async function messagesPost(req, res, user, channelId) {
     res.end(JSON.stringify({ success: true }));
 }
 
-async function read(req, res, user, channelId) {
+async function read(req, res, user) {
+    const channelId = getChannelId(req);
+    if (!channelId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing id' }));
+        return;
+    }
     if (!(await isMember(channelId, user.email))) {
         res.statusCode = 403;
         res.end(JSON.stringify({ error: 'Not a member of this channel' }));
@@ -142,7 +177,13 @@ async function read(req, res, user, channelId) {
     res.end(JSON.stringify({ success: true }));
 }
 
-async function notificationLevel(req, res, user, channelId) {
+async function notificationLevel(req, res, user) {
+    const channelId = getChannelId(req);
+    if (!channelId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing id' }));
+        return;
+    }
     if (!(await isMember(channelId, user.email))) {
         res.statusCode = 403;
         res.end(JSON.stringify({ error: 'Not a member of this channel' }));
@@ -163,7 +204,13 @@ async function notificationLevel(req, res, user, channelId) {
 // for every OTHER online member of this channel, so the caller's client can send an
 // instant SocialSignalRequestMessage-based notification to each (see RoomConnection's
 // existing emitSocialSignalRequest, reused rather than adding a new protobuf message).
-async function onlineMemberUuids(req, res, user, channelId) {
+async function onlineMemberUuids(req, res, user) {
+    const channelId = getChannelId(req);
+    if (!channelId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing id' }));
+        return;
+    }
     if (!(await isMember(channelId, user.email))) {
         res.statusCode = 403;
         res.end(JSON.stringify({ error: 'Not a member of this channel' }));
@@ -187,61 +234,57 @@ module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
 
     const pathname = new URL(req.url, `http://${req.headers.host}`).pathname;
-    const segments = pathname.split('/').filter(Boolean); // e.g. ['api','channels','create'] or ['api','channels','<id>','messages']
-    const afterChannels = segments.slice(segments.indexOf('channels') + 1);
+    const action = pathname.split('/').filter(Boolean).pop(); // e.g. 'create', 'messages'
 
     try {
-        if (afterChannels.length === 1 && afterChannels[0] === 'create') {
+        if (action === 'create') {
             const user = await requireAdmin(req, res);
             if (!user) return;
             await create(req, res, user);
             return;
         }
-        if (afterChannels.length === 1 && afterChannels[0] === 'list') {
+        if (action === 'list') {
             const user = await requireUser(req, res);
             if (!user) return;
             await list(req, res, user);
             return;
         }
-        if (afterChannels.length === 2) {
-            const [channelId, action] = afterChannels;
-            if (action === 'rename') {
-                const user = await requireAdmin(req, res);
-                if (!user) return;
-                await rename(req, res, user, channelId);
-                return;
-            }
-            if (action === 'members') {
-                const user = await requireAdmin(req, res);
-                if (!user) return;
-                await members(req, res, user, channelId);
-                return;
-            }
-            if (action === 'messages') {
-                const user = await requireUser(req, res);
-                if (!user) return;
-                if (req.method === 'POST') await messagesPost(req, res, user, channelId);
-                else await messagesGet(req, res, user, channelId);
-                return;
-            }
-            if (action === 'read') {
-                const user = await requireUser(req, res);
-                if (!user) return;
-                await read(req, res, user, channelId);
-                return;
-            }
-            if (action === 'notification-level') {
-                const user = await requireUser(req, res);
-                if (!user) return;
-                await notificationLevel(req, res, user, channelId);
-                return;
-            }
-            if (action === 'online-member-uuids') {
-                const user = await requireUser(req, res);
-                if (!user) return;
-                await onlineMemberUuids(req, res, user, channelId);
-                return;
-            }
+        if (action === 'rename') {
+            const user = await requireAdmin(req, res);
+            if (!user) return;
+            await rename(req, res, user);
+            return;
+        }
+        if (action === 'members') {
+            const user = await requireAdmin(req, res);
+            if (!user) return;
+            await members(req, res, user);
+            return;
+        }
+        if (action === 'messages') {
+            const user = await requireUser(req, res);
+            if (!user) return;
+            if (req.method === 'POST') await messagesPost(req, res, user);
+            else await messagesGet(req, res, user);
+            return;
+        }
+        if (action === 'read') {
+            const user = await requireUser(req, res);
+            if (!user) return;
+            await read(req, res, user);
+            return;
+        }
+        if (action === 'notification-level') {
+            const user = await requireUser(req, res);
+            if (!user) return;
+            await notificationLevel(req, res, user);
+            return;
+        }
+        if (action === 'online-member-uuids') {
+            const user = await requireUser(req, res);
+            if (!user) return;
+            await onlineMemberUuids(req, res, user);
+            return;
         }
         res.statusCode = 404;
         res.end(JSON.stringify({ error: 'Not found' }));
