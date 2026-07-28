@@ -66,6 +66,7 @@
         {:else if error}
             <p class="text-sm text-red-400 mb-3">{error}</p>
         {:else}
+            <p class="text-xs text-white/50 mb-2">This will add <span class="text-white font-medium">{email}</span></p>
             <div class="max-h-48 overflow-y-auto flex flex-col gap-1 mb-3">
                 {#each channels as ch (ch.id)}
                     <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/10 cursor-pointer">
