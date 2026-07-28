@@ -101,6 +101,7 @@ export class InviteManager {
         // change tears down proximity group/space membership, so this can't ride that channel).
         this.subscriptions.push(
             this.connection.socialSignalReceivedStream.subscribe((payload) => {
+                if (payload.kind !== "wave" && payload.kind !== "ping") return;
                 const kind = payload.kind === "wave" ? "wave" : "ping";
                 const toastId = `social-signal-${kind}-${Date.now()}`;
                 toastStore.addToast(
