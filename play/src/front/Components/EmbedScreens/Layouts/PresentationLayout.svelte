@@ -111,7 +111,7 @@
 
 {#if $proximityMeetingStore === true && !$inExternalServiceStore}
     <div
-        class="presentation-layout flex pointer-events-none h-full w-full absolute mobile:mt-3"
+        class="presentation-layout flex pointer-events-none h-[calc(100%-3rem)] w-full absolute top-12 mobile:mt-3"
         class:flex-col={!pipHighlightLayoutEnabled || !pipHighlightLandscape}
         class:flex-row-reverse={pipHighlightLayoutEnabled && pipHighlightLandscape}
         style={inPictureInPicture && $highlightedEmbedScreen != undefined ? "height: calc(100vh - 80px);" : ""}
