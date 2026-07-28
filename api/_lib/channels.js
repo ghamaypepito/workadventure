@@ -70,6 +70,10 @@ async function removeMembers(id, emails) {
         for (const email of normalized) {
             await client.command('SREM', `${MEMBERS_PREFIX}${id}`, email);
             await client.command('SREM', `${BY_MEMBER_PREFIX}${email}`, id);
+            // Clear this user's per-channel state too, so if they're later re-added they
+            // don't inherit stale lastread/notification settings from before their removal.
+            await client.command('DEL', `${LAST_READ_PREFIX}${email}:${id}`);
+            await client.command('HDEL', `${NOTIF_PREFIX}${email}`, id);
         }
     });
 }
