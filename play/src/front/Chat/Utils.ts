@@ -16,6 +16,7 @@ import { LL } from "../../i18n/i18n-svelte";
 import { hasMatrixChatCapabilities } from "./Connection/ChatConnection";
 import { navChat } from "./Stores/ChatStore";
 import { selectedRoomStore } from "./Stores/SelectRoomStore";
+import { selectedChannelStore } from "./Stores/ChannelsStore";
 import RequiresLoginForChatModal from "./Components/RequiresLoginForChatModal.svelte";
 import { modals } from "@wa-modals";
 
@@ -87,6 +88,7 @@ export const openDirectChatRoom = async (chatID: string) => {
             room.joinRoom().catch((error: unknown) => console.error(error));
         }
 
+        selectedChannelStore.set(undefined);
         selectedRoomStore.set(room);
         navChat.switchToChat();
         chatVisibilityStore.set(true);
@@ -108,6 +110,7 @@ export const openChatRoom = async (roomId: string) => {
 
         if (!room) throw new Error("Failed to retrieve room");
 
+        selectedChannelStore.set(undefined);
         selectedRoomStore.set(room);
         navChat.switchToChat();
         chatVisibilityStore.set(true);
