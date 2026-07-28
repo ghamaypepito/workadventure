@@ -5,6 +5,7 @@ const { REDIS_URL } = require('../_lib/admin');
 const {
     createChannel,
     renameChannel,
+    channelExists,
     addMembers,
     removeMembers,
     getMembers,
@@ -82,6 +83,11 @@ async function members(req, res, user, channelId) {
     if (parsed === null) {
         res.statusCode = 400;
         res.end(JSON.stringify({ error: 'Invalid body' }));
+        return;
+    }
+    if (!(await channelExists(channelId))) {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ error: 'Channel not found' }));
         return;
     }
     if (Array.isArray(parsed.add) && parsed.add.length > 0) await addMembers(channelId, parsed.add);

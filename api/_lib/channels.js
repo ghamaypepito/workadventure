@@ -47,6 +47,13 @@ async function renameChannel(id, name) {
     });
 }
 
+async function channelExists(id) {
+    return withRedis(REDIS_URL, async (client) => {
+        const exists = await client.command('EXISTS', `${CHANNEL_PREFIX}${id}`);
+        return exists === '1';
+    });
+}
+
 async function addMembers(id, emails) {
     const normalized = normalizeEmails(emails);
     await withRedis(REDIS_URL, async (client) => {
@@ -175,6 +182,7 @@ async function setNotificationLevel(id, email, level) {
 module.exports = {
     createChannel,
     renameChannel,
+    channelExists,
     addMembers,
     removeMembers,
     getMembers,
