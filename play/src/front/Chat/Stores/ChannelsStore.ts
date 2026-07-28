@@ -1,5 +1,6 @@
 import { writable, get } from "svelte/store";
 import { gameManager } from "../../Phaser/Game/GameManager";
+import { selectedRoomStore } from "./SelectRoomStore";
 
 export interface Channel {
     id: string;
@@ -10,6 +11,13 @@ export interface Channel {
 
 export const channelsStore = writable<Channel[]>([]);
 export const selectedChannelStore = writable<Channel | undefined>(undefined);
+
+// Keep room/DM selection and channel selection mutually exclusive: opening a room or DM while
+// a channel panel is open must close the channel panel, otherwise RoomList's channel branch
+// (checked first) keeps winning and clicking a DM appears to do nothing.
+selectedRoomStore.subscribe((room) => {
+    if (room !== undefined) selectedChannelStore.set(undefined);
+});
 
 const CHANNEL_SIGNAL_PREFIX = "channel:";
 let subscribed = false;
