@@ -10,6 +10,7 @@
     } from "../../Connection/ChatConnection";
     import { chatSearchBarValue } from "../../Stores/ChatStore";
     import { selectedRoomStore } from "../../Stores/SelectRoomStore";
+    import { selectedChannelStore } from "../../Stores/ChannelsStore";
     import LL from "../../../../i18n/i18n-svelte";
     import Avatar from "../Avatar.svelte";
     import EncryptionBadge from "../EncryptionBadge.svelte";
@@ -59,8 +60,14 @@
             "bg-white/10 rounded": isSelected,
         },
     ]}
-    onclick={() => selectedRoomStore.set(room)}
-    onkeyup={() => selectedRoomStore.set(room)}
+    onclick={() => {
+        selectedRoomStore.set(room);
+        selectedChannelStore.set(undefined);
+    }}
+    onkeyup={() => {
+        selectedRoomStore.set(room);
+        selectedChannelStore.set(undefined);
+    }}
     role="button"
     tabindex="0"
     data-testid={$roomName}

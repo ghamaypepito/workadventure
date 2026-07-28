@@ -3,6 +3,7 @@
     import type { ChatRoomMembershipManagement, ChatRoom } from "../../Connection/ChatConnection";
     import { warningMessageStore } from "../../../Stores/ErrorStore";
     import { selectedRoomStore } from "../../Stores/SelectRoomStore";
+    import { selectedChannelStore } from "../../Stores/ChannelsStore";
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import Avatar from "../Avatar.svelte";
     import { LL } from "../../../../i18n/i18n-svelte";
@@ -30,7 +31,10 @@
         // select that instead (same pattern as JoignableRooms/RoomSuggested).
         chat.joinRoom(room.id)
             .then((joinedRoom) => {
-                if (joinedRoom && !joinedRoom.isRoomFolder) selectedRoomStore.set(joinedRoom);
+                if (joinedRoom && !joinedRoom.isRoomFolder) {
+                    selectedRoomStore.set(joinedRoom);
+                    selectedChannelStore.set(undefined);
+                }
             })
             .catch(() => {
                 warningMessageStore.addWarningMessage($LL.chat.failedToJoinRoom());
