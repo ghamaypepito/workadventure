@@ -2,6 +2,7 @@
     import * as Sentry from "@sentry/svelte";
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import { selectedRoomStore } from "../../Stores/SelectRoomStore";
+    import { selectedChannelStore } from "../../Stores/ChannelsStore";
     import { warningMessageStore } from "../../../Stores/ErrorStore";
     import Avatar from "../Avatar.svelte";
     import { LL } from "../../../../i18n/i18n-svelte";
@@ -24,7 +25,10 @@
             chatconnection
                 .joinRoom(roomInformation.id)
                 .then((room) => {
-                    if (room && !room.isRoomFolder) selectedRoomStore.set(room);
+                    if (room && !room.isRoomFolder) {
+                        selectedRoomStore.set(room);
+                        selectedChannelStore.set(undefined);
+                    }
                 })
                 .catch(() => {
                     warningMessageStore.addWarningMessage($LL.chat.failedToJoinRoom());

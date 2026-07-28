@@ -6,6 +6,7 @@
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import { chatSearchBarValue, joignableRoom } from "../../Stores/ChatStore";
     import { selectedRoomStore } from "../../Stores/SelectRoomStore";
+    import { selectedChannelStore } from "../../Stores/ChannelsStore";
     import Avatar from "../Avatar.svelte";
     import { IconLoader } from "@wa-icons";
 
@@ -25,6 +26,7 @@
             joignableRoom.set([]);
             chatSearchBarValue.set("");
             selectedRoomStore.set(newRoom);
+            selectedChannelStore.set(undefined);
         } catch (error) {
             console.error(error);
             if (error instanceof Error) {
