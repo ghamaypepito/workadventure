@@ -8,6 +8,20 @@
         email?: string;
     }
 
+    interface Props {
+        /**
+         * Horizontal offsets that clear the chat sidebar (left) and map editor panel/toolbar (right).
+         * Passed in from MainLayout.svelte, which already computes these to apply as padding on its
+         * own root - reused here rather than duplicated, so the two can't drift out of sync. This bar
+         * is absolutely positioned, so `inset-x-0` would resolve against the padding box edges and
+         * ignore that padding entirely; these are applied as explicit inline insets instead.
+         */
+        marginLeft?: number;
+        marginRight?: number;
+    }
+
+    let { marginLeft = 0, marginRight = 0 }: Props = $props();
+
     function getCookie(name: string): string | null {
         const match = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
         if (!match) return null;
@@ -44,7 +58,8 @@
 <svelte:window onclick={closeAccountMenu} />
 
 <div
-    class="absolute top-0 inset-x-0 z-[1000] h-12 bg-[#1c2a41] flex items-center px-4 gap-4 text-white pointer-events-auto"
+    class="absolute top-0 z-[1000] h-12 bg-[#1c2a41] flex items-center px-4 gap-4 text-white pointer-events-auto"
+    style="inset-inline-start: {marginLeft}px; inset-inline-end: {marginRight}px;"
 >
     <div class="flex-1 min-w-0 flex items-center">
         {#if $currentZoneNameStore}

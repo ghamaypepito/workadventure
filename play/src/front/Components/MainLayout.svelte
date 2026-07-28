@@ -272,7 +272,7 @@
             </div>
         </div>
     {/if}
-    <TopBar />
+    <TopBar {marginLeft} {marginRight} />
 
     {#if $highlightedEmbedScreen && $highlightFullScreen}
         <div class="w-full h-full fixed start-0 end-0 z-[310]">
