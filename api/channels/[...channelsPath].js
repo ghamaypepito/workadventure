@@ -118,6 +118,43 @@ async function members(req, res, user) {
     res.end(JSON.stringify({ success: true }));
 }
 
+// Requires admin. Lists the channel's current members (email addresses).
+async function membersList(req, res, user) {
+    const channelId = getChannelId(req);
+    if (!channelId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing id' }));
+        return;
+    }
+    if (!(await channelExists(channelId))) {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ error: 'Channel not found' }));
+        return;
+    }
+    const members = await getMembers(channelId);
+    res.statusCode = 200;
+    res.end(JSON.stringify({ members }));
+}
+
+// Requires admin. Resolves a WA player uuid to the SSO email registered for it (see the
+// identity endpoint in api/admission/[...admissionPath].js, which writes wa:uuid-email:*),
+// so the online-user-list's "Add to channel" action can target this specific user by email
+// even though it only has their uuid client-side.
+async function resolveEmail(req, res, user) {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const uuid = url.searchParams.get('uuid');
+    if (!uuid) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing uuid' }));
+        return;
+    }
+    const email = await withRedis(REDIS_URL, async (client) => {
+        return client.command('GET', `wa:uuid-email:${uuid}`);
+    });
+    res.statusCode = 200;
+    res.end(JSON.stringify({ email: email || null }));
+}
+
 // Requires admin. Soft-deletes a channel: hides it from every member's list, but keeps
 // all its data intact so it can be restored later.
 async function archive(req, res, user) {
@@ -351,7 +388,14 @@ module.exports = async (req, res) => {
         if (action === 'members') {
             const user = await requireAdmin(req, res);
             if (!user) return;
-            await members(req, res, user);
+            if (req.method === 'GET') await membersList(req, res, user);
+            else await members(req, res, user);
+            return;
+        }
+        if (action === 'resolve-email') {
+            const user = await requireAdmin(req, res);
+            if (!user) return;
+            await resolveEmail(req, res, user);
             return;
         }
         if (action === 'messages') {
