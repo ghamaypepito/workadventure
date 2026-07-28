@@ -47,6 +47,9 @@
         shouldShowRoomTimeline,
     } from "./RoomListLayout";
     import ProximityRoomRow from "./Room/ProximityRoomRow.svelte";
+    import ChannelsSection from "./ChannelsSection.svelte";
+    import ChannelPanel from "./ChannelPanel.svelte";
+    import { selectedChannelStore } from "../Stores/ChannelsStore";
     import { IconChevronUp, IconCloudLock, IconPlus, IconRefresh } from "@wa-icons";
 
     interface Props {
@@ -287,6 +290,7 @@
                         </div>
                     </div>
                 {/if}
+                <ChannelsSection />
                 {#if $chatConnectionStatus === "ONLINE"}
                     {#if $joignableRoom.length > 0 && $chatSearchBarValue.trim() !== ""}
                         <p class="p-0 m-0 text-gray-400">{$LL.chat.availableRooms()}</p>
@@ -412,7 +416,11 @@
             </div>
         </div>
     {/if}
-    {#if $selectedRoomStore !== undefined}
+    {#if $selectedChannelStore !== undefined}
+        <div class="overflow-y-auto min-w-0">
+            <ChannelPanel channel={$selectedChannelStore} />
+        </div>
+    {:else if $selectedRoomStore !== undefined}
         <div class="overflow-y-auto min-w-0">
             {#if showRoomSidePanelInTimelineColumn && selectedRoomWithSidePanel}
                 <RoomSidePanel room={selectedRoomWithSidePanel} showCloseButton closeOnTimelineFocus />
