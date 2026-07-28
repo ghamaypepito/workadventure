@@ -136,7 +136,9 @@ export async function fetchArchivedChannels(): Promise<ArchivedChannel[]> {
 
 export async function fetchChannelMembers(channelId: string): Promise<string[]> {
     const res = await fetch(`/api/channels/members?id=${channelId}`);
-    if (!res.ok) return [];
+    if (!res.ok) {
+        throw new Error("Failed to load channel members");
+    }
     const { members } = await res.json();
     return members;
 }

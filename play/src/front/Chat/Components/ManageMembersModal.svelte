@@ -18,16 +18,21 @@
 
     async function load() {
         loading = true;
-        const [members, known] = await Promise.all([
-            fetchChannelMembers(channelId),
-            fetch("/api/admission/known-members")
-                .then((r) => r.json())
-                .then((d) => d.members)
-                .catch(() => []),
-        ]);
-        currentMembers = members;
-        knownMembers = known;
-        loading = false;
+        error = "";
+        const knownPromise = fetch("/api/admission/known-members")
+            .then((r) => r.json())
+            .then((d) => d.members)
+            .catch(() => []);
+        try {
+            const members = await fetchChannelMembers(channelId);
+            currentMembers = members;
+            knownMembers = await knownPromise;
+        } catch {
+            error = "Failed to load channel members";
+            knownMembers = await knownPromise;
+        } finally {
+            loading = false;
+        }
     }
     onMount(load);
 
@@ -42,6 +47,7 @@
 
     async function addSelected() {
         if (selectedToAdd.size === 0) return;
+        error = "";
         const ok = await addChannelMembers(channelId, Array.from(selectedToAdd));
         if (!ok) {
             error = "Failed to add members";
@@ -53,6 +59,7 @@
 
     async function remove(email: string) {
         if (!confirm(`Remove ${email} from #${channelName}?`)) return;
+        error = "";
         const ok = await removeChannelMember(channelId, email);
         if (!ok) {
             error = "Failed to remove member";
