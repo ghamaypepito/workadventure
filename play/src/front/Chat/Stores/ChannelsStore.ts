@@ -1,6 +1,5 @@
 import { writable, get } from "svelte/store";
 import { gameManager } from "../../Phaser/Game/GameManager";
-import { selectedRoomStore } from "./SelectRoomStore";
 
 export interface Channel {
     id: string;
@@ -12,12 +11,13 @@ export interface Channel {
 export const channelsStore = writable<Channel[]>([]);
 export const selectedChannelStore = writable<Channel | undefined>(undefined);
 
-// Keep room/DM selection and channel selection mutually exclusive: opening a room or DM while
-// a channel panel is open must close the channel panel, otherwise RoomList's channel branch
-// (checked first) keeps winning and clicking a DM appears to do nothing.
-selectedRoomStore.subscribe((room) => {
-    if (room !== undefined) selectedChannelStore.set(undefined);
-});
+// NOTE: Room/DM selection and channel selection are kept mutually exclusive by having each
+// genuine user-click call site that sets selectedRoomStore also clear selectedChannelStore
+// (see ProximityRoomRow.svelte and Chat/Utils.ts). Do NOT reintroduce a blanket
+// selectedRoomStore.subscribe(...) here - it also fires on the automatic/non-user-intent
+// selectedRoomStore.set() calls in ProximityChatRoom.ts (incoming proximity message /
+// auto-join), which would wrongly force-close an open channel panel during ordinary
+// proximity chat activity.
 
 const CHANNEL_SIGNAL_PREFIX = "channel:";
 let subscribed = false;

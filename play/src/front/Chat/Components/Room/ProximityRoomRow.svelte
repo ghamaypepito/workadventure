@@ -3,6 +3,7 @@
     import LL from "../../../../i18n/i18n-svelte";
     import { chatNotificationStore } from "../../../Stores/ProximityNotificationStore";
     import { selectedRoomStore } from "../../Stores/SelectRoomStore";
+    import { selectedChannelStore } from "../../Stores/ChannelsStore";
     import { chatSearchBarValue } from "../../Stores/ChatStore";
     import type { ProximityChatRoom } from "../../Connection/Proximity/ProximityChatRoom";
     import { gameManager } from "../../../Phaser/Game/GameManager";
@@ -32,6 +33,7 @@
     );
 
     function selectRoom() {
+        selectedChannelStore.set(undefined);
         selectedRoomStore.set(room);
         gameManager.getCurrentGameScene().proximityChatRoomManager.selectRoom(room);
         room.hasUnreadMessages.set(false);
