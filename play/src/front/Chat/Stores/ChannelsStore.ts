@@ -111,6 +111,7 @@ export async function archiveChannel(channelId: string): Promise<boolean> {
 
 export async function restoreChannel(channelId: string): Promise<boolean> {
     const res = await fetch(`/api/channels/restore?id=${channelId}`, { method: "POST" });
+    if (res.ok) await refreshChannels();
     return res.ok;
 }
 
