@@ -13,7 +13,7 @@ function normalizeEmails(emails) {
     return Array.from(new Set((emails || []).map((e) => e.toLowerCase())));
 }
 
-async function createChannel(name, memberEmails) {
+async function createChannel(name, memberEmails, createdBy) {
     const emails = normalizeEmails(memberEmails);
     if (emails.length === 0) {
         throw new Error('A channel needs at least one member');
@@ -28,6 +28,8 @@ async function createChannel(name, memberEmails) {
             name,
             'createdAt',
             String(Date.now()),
+            'createdBy',
+            createdBy,
         );
         for (const email of emails) {
             await client.command('SADD', `${MEMBERS_PREFIX}${id}`, email);
@@ -97,7 +99,7 @@ async function getChannel(id) {
         const data = {};
         for (let i = 0; i < raw.length; i += 2) data[raw[i]] = raw[i + 1];
         if (!data.name) return null;
-        return { id, name: data.name, createdAt: parseInt(data.createdAt, 10) || 0 };
+        return { id, name: data.name, createdAt: parseInt(data.createdAt, 10) || 0, createdBy: data.createdBy };
     });
 }
 
@@ -133,6 +135,7 @@ async function listChannelsForUser(email) {
                 name: data.name,
                 unreadCount,
                 notificationLevel: notifLevel === 'none' ? 'none' : 'all',
+                createdBy: data.createdBy,
             });
         }
         return result;

@@ -43,7 +43,7 @@ async function create(req, res, user) {
     if (!memberEmails.includes(user.email)) memberEmails.push(user.email);
 
     try {
-        const { id } = await createChannel(parsed.name, memberEmails);
+        const { id } = await createChannel(parsed.name, memberEmails, user.email);
         res.statusCode = 200;
         res.end(JSON.stringify({ id }));
     } catch (err) {
