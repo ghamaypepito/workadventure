@@ -1,5 +1,6 @@
 import { writable, get } from "svelte/store";
 import { gameManager } from "../../Phaser/Game/GameManager";
+import type { RoomConnection } from "../../Connection/RoomConnection";
 
 export interface Channel {
     id: string;
@@ -20,7 +21,12 @@ export const selectedChannelStore = writable<Channel | undefined>(undefined);
 // proximity chat activity.
 
 const CHANNEL_SIGNAL_PREFIX = "channel:";
-let subscribed = false;
+// Tracks which RoomConnection instance's socialSignalReceivedStream we're currently subscribed
+// to (rather than a plain boolean flag). RoomConnection.tearDown() completes this stream on
+// map change / network blip / reconnect, and a brand-new RoomConnection instance is then
+// created; comparing instances lets us detect that swap and resubscribe, instead of leaving
+// real-time badges dead until a full page reload.
+let subscribedConnection: RoomConnection | undefined;
 
 export async function refreshChannels(): Promise<void> {
     const res = await fetch("/api/channels/list");
@@ -38,10 +44,10 @@ export async function refreshChannels(): Promise<void> {
 }
 
 function ensureSocialSignalSubscription(): void {
-    if (subscribed) return;
     const connection = gameManager.getCurrentGameScene().connection;
     if (!connection) return;
-    subscribed = true;
+    if (connection === subscribedConnection) return;
+    subscribedConnection = connection;
     connection.socialSignalReceivedStream.subscribe((payload) => {
         if (!payload.kind.startsWith(CHANNEL_SIGNAL_PREFIX)) return;
         const channelId = payload.kind.slice(CHANNEL_SIGNAL_PREFIX.length);
