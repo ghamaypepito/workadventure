@@ -9,12 +9,15 @@
         refreshChannels,
         archiveChannel,
     } from "../Stores/ChannelsStore";
+    import ManageMembersModal from "./ManageMembersModal.svelte";
 
     interface Props {
         channelId: string;
     }
 
     let { channelId }: Props = $props();
+
+    let showManageMembers = $state(false);
 
     let channel = $derived($channelsStore.find((c) => c.id === channelId));
 
@@ -134,6 +137,9 @@
             {#if isAdminUser}
                 <button class="text-xs text-white/50 hover:text-white" onclick={rename}>Rename</button>
                 <button class="text-xs text-white/50 hover:text-white" onclick={archive}>Archive</button>
+                <button class="text-xs text-white/50 hover:text-white" onclick={() => (showManageMembers = true)}
+                    >Members</button
+                >
             {/if}
             <button class="text-xs text-white/50 hover:text-white" onclick={toggleNotifications}>
                 {channel.notificationLevel === "all" ? "All messages" : "Nothing"}
@@ -167,5 +173,12 @@
                 >Send</button
             >
         </div>
+        {#if showManageMembers}
+            <ManageMembersModal
+                channelId={channel.id}
+                channelName={channel.name}
+                onClose={() => (showManageMembers = false)}
+            />
+        {/if}
     {/if}
 </div>

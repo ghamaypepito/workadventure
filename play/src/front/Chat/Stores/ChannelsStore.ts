@@ -133,3 +133,35 @@ export async function fetchArchivedChannels(): Promise<ArchivedChannel[]> {
     const { channels } = await res.json();
     return channels;
 }
+
+export async function fetchChannelMembers(channelId: string): Promise<string[]> {
+    const res = await fetch(`/api/channels/members?id=${channelId}`);
+    if (!res.ok) return [];
+    const { members } = await res.json();
+    return members;
+}
+
+export async function addChannelMembers(channelId: string, emails: string[]): Promise<boolean> {
+    const res = await fetch(`/api/channels/members?id=${channelId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ add: emails }),
+    });
+    return res.ok;
+}
+
+export async function removeChannelMember(channelId: string, email: string): Promise<boolean> {
+    const res = await fetch(`/api/channels/members?id=${channelId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remove: [email] }),
+    });
+    return res.ok;
+}
+
+export async function resolveEmailFromUuid(uuid: string): Promise<string | null> {
+    const res = await fetch(`/api/channels/resolve-email?uuid=${uuid}`);
+    if (!res.ok) return null;
+    const { email } = await res.json();
+    return email;
+}
