@@ -10,7 +10,12 @@
 
     function getCookie(name: string): string | null {
         const match = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
-        return match ? decodeURIComponent(match[1]) : null;
+        if (!match) return null;
+        try {
+            return decodeURIComponent(match[1]);
+        } catch {
+            return null;
+        }
     }
 
     function getSessionUser(): SessionUser | null {
