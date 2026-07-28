@@ -70,10 +70,10 @@ export async function postChannelMessage(channelId: string, message: string): Pr
     // message. Content never rides this signal - only channelId, via the "kind" string.
     try {
         const uuidsRes = await fetch(`/api/channels/${channelId}/online-member-uuids`);
-        if (!uuidsRes.ok) return;
+        if (!uuidsRes.ok) return true;
         const { uuids } = await uuidsRes.json();
         const connection = gameManager.getCurrentGameScene().connection;
-        if (!connection) return;
+        if (!connection) return true;
         for (const uuid of uuids as string[]) {
             connection.emitSocialSignalRequest(uuid, CHANNEL_SIGNAL_PREFIX + channelId);
         }
