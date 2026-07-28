@@ -14,6 +14,9 @@ function normalizeEmails(emails) {
 }
 
 async function createChannel(name, memberEmails, createdBy) {
+    if (!createdBy) {
+        throw new Error('createdBy is required');
+    }
     const emails = normalizeEmails(memberEmails);
     if (emails.length === 0) {
         throw new Error('A channel needs at least one member');
