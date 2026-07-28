@@ -39,19 +39,19 @@
 <svelte:window onclick={closeAccountMenu} />
 
 <div
-    class="absolute top-0 inset-x-0 z-[1000] h-12 bg-[#1c2a41] flex items-center px-4 gap-4 text-white pointer-events-none"
+    class="absolute top-0 inset-x-0 z-[1000] h-12 bg-[#1c2a41] flex items-center px-4 gap-4 text-white pointer-events-auto"
 >
-    <div class="flex-1 min-w-0 flex items-center pointer-events-auto">
+    <div class="flex-1 min-w-0 flex items-center">
         {#if $currentZoneNameStore}
             <span class="text-sm truncate opacity-80">{$currentZoneNameStore}</span>
         {/if}
     </div>
 
-    <div class="pointer-events-auto">
+    <div>
         <MeetingViewToggle />
     </div>
 
-    <div class="relative pointer-events-auto">
+    <div class="relative">
         {#if sessionUser}
             <button
                 type="button"
