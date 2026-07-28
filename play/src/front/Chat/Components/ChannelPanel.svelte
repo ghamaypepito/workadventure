@@ -33,7 +33,7 @@
 
     async function loadMessages() {
         loading = true;
-        const res = await fetch(`/api/channels/${channelId}/messages?limit=50`);
+        const res = await fetch(`/api/channels/messages?id=${channelId}&limit=50`);
         if (!res.ok) {
             loading = false;
             if (res.status === 403) {
@@ -82,7 +82,7 @@
     async function rename() {
         const newName = prompt("Rename channel", channel?.name);
         if (!newName || !newName.trim()) return;
-        const res = await fetch(`/api/channels/${channelId}/rename`, {
+        const res = await fetch(`/api/channels/rename?id=${channelId}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name: newName.trim() }),

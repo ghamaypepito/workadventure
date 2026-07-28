@@ -64,7 +64,7 @@ function ensureSocialSignalSubscription(): void {
 }
 
 export async function postChannelMessage(channelId: string, message: string): Promise<boolean> {
-    const res = await fetch(`/api/channels/${channelId}/messages`, {
+    const res = await fetch(`/api/channels/messages?id=${channelId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
@@ -75,7 +75,7 @@ export async function postChannelMessage(channelId: string, message: string): Pr
     // signal (see RoomConnection.emitSocialSignalRequest) rather than a new protobuf
     // message. Content never rides this signal - only channelId, via the "kind" string.
     try {
-        const uuidsRes = await fetch(`/api/channels/${channelId}/online-member-uuids`);
+        const uuidsRes = await fetch(`/api/channels/online-member-uuids?id=${channelId}`);
         if (!uuidsRes.ok) return true;
         const { uuids } = await uuidsRes.json();
         const connection = gameManager.getCurrentGameScene().connection;
@@ -90,12 +90,12 @@ export async function postChannelMessage(channelId: string, message: string): Pr
 }
 
 export async function markChannelRead(channelId: string): Promise<void> {
-    await fetch(`/api/channels/${channelId}/read`, { method: "POST" });
+    await fetch(`/api/channels/read?id=${channelId}`, { method: "POST" });
     channelsStore.set(get(channelsStore).map((c) => (c.id === channelId ? { ...c, unreadCount: 0 } : c)));
 }
 
 export async function setChannelNotificationLevel(channelId: string, level: "all" | "none"): Promise<void> {
-    await fetch(`/api/channels/${channelId}/notification-level`, {
+    await fetch(`/api/channels/notification-level?id=${channelId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ level }),
