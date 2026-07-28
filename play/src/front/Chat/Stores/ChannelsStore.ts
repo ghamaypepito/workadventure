@@ -102,3 +102,33 @@ export async function setChannelNotificationLevel(channelId: string, level: "all
     });
     channelsStore.set(get(channelsStore).map((c) => (c.id === channelId ? { ...c, notificationLevel: level } : c)));
 }
+
+export async function archiveChannel(channelId: string): Promise<boolean> {
+    const res = await fetch(`/api/channels/archive?id=${channelId}`, { method: "POST" });
+    if (res.ok) await refreshChannels();
+    return res.ok;
+}
+
+export async function restoreChannel(channelId: string): Promise<boolean> {
+    const res = await fetch(`/api/channels/restore?id=${channelId}`, { method: "POST" });
+    return res.ok;
+}
+
+export async function deleteChannelPermanently(channelId: string): Promise<boolean> {
+    const res = await fetch(`/api/channels/delete?id=${channelId}`, { method: "POST" });
+    return res.ok;
+}
+
+export interface ArchivedChannel {
+    id: string;
+    name: string;
+    createdAt: number;
+    createdBy?: string;
+}
+
+export async function fetchArchivedChannels(): Promise<ArchivedChannel[]> {
+    const res = await fetch("/api/channels/archived");
+    if (!res.ok) return [];
+    const { channels } = await res.json();
+    return channels;
+}
