@@ -49,10 +49,19 @@
 
     async function confirmAdd() {
         if (!email || selected.size === 0) return;
+        const failures: string[] = [];
         for (const channelId of selected) {
-            await addChannelMembers(channelId, [email]);
+            const ok = await addChannelMembers(channelId, [email]);
+            if (!ok) {
+                const ch = channels.find((c) => c.id === channelId);
+                failures.push(ch?.name ?? channelId);
+            }
         }
-        success = true;
+        if (failures.length > 0) {
+            error = `Failed to add to: ${failures.join(", ")}`;
+        } else {
+            success = true;
+        }
     }
 </script>
 
