@@ -279,7 +279,10 @@
             <MediaBox videoBox={$highlightedEmbedScreen} fullScreen={true} />
         </div>
         <!-- Fullscreen participant cameras list: slide + single edge toggle (same arrow, same spot) -->
-        <div class="absolute top-12 right-0 z-[320] h-full w-[250px] pointer-events-none" aria-hidden="false">
+        <div
+            class="absolute top-12 right-0 z-[320] h-[calc(100%-3rem)] w-[250px] pointer-events-none"
+            aria-hidden="false"
+        >
             <div
                 id="highlightFullScreenParticipantCamerasList"
                 class="absolute inset-y-0 right-0 flex w-[250px] flex-col bg-contrast/50 backdrop-blur shadow-lg transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] will-change-transform"
