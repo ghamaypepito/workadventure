@@ -10,6 +10,7 @@ const {
     removeMembers,
     getMembers,
     isMember,
+    isArchived,
     listChannelsForUser,
     appendMessage,
     getMessages,
@@ -194,6 +195,11 @@ async function messagesGet(req, res, user) {
         res.end(JSON.stringify({ error: 'Not a member of this channel' }));
         return;
     }
+    if (await isArchived(channelId)) {
+        res.statusCode = 403;
+        res.end(JSON.stringify({ error: 'This channel has been archived' }));
+        return;
+    }
     const offset = Math.max(0, parseInt(url.searchParams.get('offset'), 10) || 0);
     const limit = Math.min(
         CHAT_HISTORY_MAX_LIMIT,
@@ -214,6 +220,11 @@ async function messagesPost(req, res, user) {
     if (!(await isMember(channelId, user.email))) {
         res.statusCode = 403;
         res.end(JSON.stringify({ error: 'Not a member of this channel' }));
+        return;
+    }
+    if (await isArchived(channelId)) {
+        res.statusCode = 403;
+        res.end(JSON.stringify({ error: 'This channel has been archived' }));
         return;
     }
     const parsed = await readBody(req);
@@ -239,6 +250,11 @@ async function read(req, res, user) {
         res.end(JSON.stringify({ error: 'Not a member of this channel' }));
         return;
     }
+    if (await isArchived(channelId)) {
+        res.statusCode = 403;
+        res.end(JSON.stringify({ error: 'This channel has been archived' }));
+        return;
+    }
     await markRead(channelId, user.email);
     res.statusCode = 200;
     res.end(JSON.stringify({ success: true }));
@@ -254,6 +270,11 @@ async function notificationLevel(req, res, user) {
     if (!(await isMember(channelId, user.email))) {
         res.statusCode = 403;
         res.end(JSON.stringify({ error: 'Not a member of this channel' }));
+        return;
+    }
+    if (await isArchived(channelId)) {
+        res.statusCode = 403;
+        res.end(JSON.stringify({ error: 'This channel has been archived' }));
         return;
     }
     const parsed = await readBody(req);
@@ -281,6 +302,11 @@ async function onlineMemberUuids(req, res, user) {
     if (!(await isMember(channelId, user.email))) {
         res.statusCode = 403;
         res.end(JSON.stringify({ error: 'Not a member of this channel' }));
+        return;
+    }
+    if (await isArchived(channelId)) {
+        res.statusCode = 403;
+        res.end(JSON.stringify({ error: 'This channel has been archived' }));
         return;
     }
     const allMembers = await getMembers(channelId);
