@@ -7,6 +7,7 @@
         postChannelMessage,
         setChannelNotificationLevel,
         refreshChannels,
+        archiveChannel,
     } from "../Stores/ChannelsStore";
 
     interface Props {
@@ -99,6 +100,17 @@
     function close() {
         selectedChannelStore.set(undefined);
     }
+
+    async function archive() {
+        if (!confirm(`Archive #${channel?.name}? Members will no longer see it, but it can be restored later by an admin.`))
+            return;
+        const ok = await archiveChannel(channelId);
+        if (!ok) {
+            error = "Failed to archive channel";
+            return;
+        }
+        close();
+    }
 </script>
 
 <div class="flex flex-col h-full text-white">
@@ -121,6 +133,7 @@
             <div class="font-bold flex-1 truncate"># {channel.name}</div>
             {#if isAdminUser}
                 <button class="text-xs text-white/50 hover:text-white" onclick={rename}>Rename</button>
+                <button class="text-xs text-white/50 hover:text-white" onclick={archive}>Archive</button>
             {/if}
             <button class="text-xs text-white/50 hover:text-white" onclick={toggleNotifications}>
                 {channel.notificationLevel === "all" ? "All messages" : "Nothing"}

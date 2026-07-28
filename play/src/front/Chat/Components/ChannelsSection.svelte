@@ -3,9 +3,11 @@
     import { channelsStore, selectedChannelStore, refreshChannels } from "../Stores/ChannelsStore";
     import { selectedRoomStore } from "../Stores/SelectRoomStore";
     import CreateChannelModal from "./CreateChannelModal.svelte";
+    import ArchivedChannelsModal from "./ArchivedChannelsModal.svelte";
 
     let displayChannels = $state(false);
     let showCreateModal = $state(false);
+    let showArchivedModal = $state(false);
 
     const isAdminUser =
         typeof window !== "undefined" && (window as unknown as { __waIsAdmin?: boolean }).__waIsAdmin === true;
@@ -58,10 +60,19 @@
             >
                 + Add channel
             </button>
+            <button
+                class="flex items-center gap-2 px-2 py-2 rounded hover:bg-white/10 text-sm text-white/50 hover:text-white text-left"
+                onclick={() => (showArchivedModal = true)}
+            >
+                Archived channels
+            </button>
         {/if}
     </div>
 {/if}
 
 {#if showCreateModal}
     <CreateChannelModal onClose={() => (showCreateModal = false)} />
+{/if}
+{#if showArchivedModal}
+    <ArchivedChannelsModal onClose={() => (showArchivedModal = false)} />
 {/if}
