@@ -8,6 +8,7 @@ const BY_MEMBER_PREFIX = 'wa:channels:by-member:';
 const HISTORY_PREFIX = 'wa:channel-history:';
 const LAST_READ_PREFIX = 'wa:channel-lastread:';
 const NOTIF_PREFIX = 'wa:channel-notif:';
+const ALL_CHANNELS_KEY = 'wa:all-channel-ids';
 
 function normalizeEmails(emails) {
     return Array.from(new Set((emails || []).map((e) => e.toLowerCase())));
@@ -24,6 +25,7 @@ async function createChannel(name, memberEmails, createdBy) {
     const id = crypto.randomBytes(9).toString('hex');
 
     await withRedis(REDIS_URL, async (client) => {
+        await client.command('SADD', ALL_CHANNELS_KEY, id);
         await client.command(
             'HSET',
             `${CHANNEL_PREFIX}${id}`,
@@ -95,6 +97,60 @@ async function isMember(id, email) {
     });
 }
 
+async function archiveChannel(id) {
+    return withRedis(REDIS_URL, async (client) => {
+        const exists = await client.command('EXISTS', `${CHANNEL_PREFIX}${id}`);
+        if (exists !== '1') return false;
+        await client.command('HSET', `${CHANNEL_PREFIX}${id}`, 'archived', '1');
+        return true;
+    });
+}
+
+async function restoreChannel(id) {
+    return withRedis(REDIS_URL, async (client) => {
+        const exists = await client.command('EXISTS', `${CHANNEL_PREFIX}${id}`);
+        if (exists !== '1') return false;
+        await client.command('HDEL', `${CHANNEL_PREFIX}${id}`, 'archived');
+        return true;
+    });
+}
+
+// Permanently erases a channel and everything about it: the channel hash itself, its
+// membership set and every member's reverse by-member/lastread/notification entries for
+// it, and its full message history. Unlike archiveChannel, there is no recovery from this.
+async function deleteChannelPermanently(id) {
+    const members = await getMembers(id);
+    await withRedis(REDIS_URL, async (client) => {
+        for (const email of members) {
+            await client.command('SREM', `${BY_MEMBER_PREFIX}${email}`, id);
+            await client.command('DEL', `${LAST_READ_PREFIX}${email}:${id}`);
+            await client.command('HDEL', `${NOTIF_PREFIX}${email}`, id);
+        }
+        await client.command('DEL', `${CHANNEL_PREFIX}${id}`);
+        await client.command('DEL', `${MEMBERS_PREFIX}${id}`);
+        await client.command('DEL', `${HISTORY_PREFIX}${id}`);
+        await client.command('SREM', ALL_CHANNELS_KEY, id);
+    });
+}
+
+// Lists every archived channel, regardless of the admin's own membership, for the
+// admin-only archived-channels management view.
+async function listArchivedChannels() {
+    return withRedis(REDIS_URL, async (client) => {
+        const ids = (await client.command('SMEMBERS', ALL_CHANNELS_KEY)) || [];
+        const result = [];
+        for (const id of ids) {
+            const raw = await client.command('HGETALL', `${CHANNEL_PREFIX}${id}`);
+            if (!raw || raw.length === 0) continue;
+            const data = {};
+            for (let i = 0; i < raw.length; i += 2) data[raw[i]] = raw[i + 1];
+            if (!data.name || data.archived !== '1') continue;
+            result.push({ id, name: data.name, createdAt: parseInt(data.createdAt, 10) || 0, createdBy: data.createdBy });
+        }
+        return result;
+    });
+}
+
 async function getChannel(id) {
     return withRedis(REDIS_URL, async (client) => {
         const raw = await client.command('HGETALL', `${CHANNEL_PREFIX}${id}`);
@@ -116,6 +172,7 @@ async function listChannelsForUser(email) {
             const data = {};
             for (let i = 0; i < raw.length; i += 2) data[raw[i]] = raw[i + 1];
             if (!data.name) continue;
+            if (data.archived === '1') continue;
 
             const lastRead = (await client.command('GET', `${LAST_READ_PREFIX}${email.toLowerCase()}:${id}`)) || '0';
             const total = parseInt((await client.command('LLEN', `${HISTORY_PREFIX}${id}`)) || '0', 10);
@@ -204,4 +261,8 @@ module.exports = {
     markRead,
     getNotificationLevel,
     setNotificationLevel,
+    archiveChannel,
+    restoreChannel,
+    deleteChannelPermanently,
+    listArchivedChannels,
 };

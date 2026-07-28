@@ -16,6 +16,10 @@ const {
     markRead,
     getNotificationLevel,
     setNotificationLevel,
+    archiveChannel,
+    restoreChannel,
+    deleteChannelPermanently,
+    listArchivedChannels,
 } = require('../_lib/channels');
 
 const CHAT_HISTORY_DEFAULT_LIMIT = 50;
@@ -111,6 +115,69 @@ async function members(req, res, user) {
     if (Array.isArray(parsed.remove) && parsed.remove.length > 0) await removeMembers(channelId, parsed.remove);
     res.statusCode = 200;
     res.end(JSON.stringify({ success: true }));
+}
+
+// Requires admin. Soft-deletes a channel: hides it from every member's list, but keeps
+// all its data intact so it can be restored later.
+async function archive(req, res, user) {
+    const channelId = getChannelId(req);
+    if (!channelId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing id' }));
+        return;
+    }
+    const updated = await archiveChannel(channelId);
+    if (!updated) {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ error: 'Channel not found' }));
+        return;
+    }
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true }));
+}
+
+// Requires admin. Un-archives a previously archived channel.
+async function restore(req, res, user) {
+    const channelId = getChannelId(req);
+    if (!channelId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing id' }));
+        return;
+    }
+    const updated = await restoreChannel(channelId);
+    if (!updated) {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ error: 'Channel not found' }));
+        return;
+    }
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true }));
+}
+
+// Requires admin. Permanently erases the channel and all its data - no recovery.
+async function deletePermanently(req, res, user) {
+    const channelId = getChannelId(req);
+    if (!channelId) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing id' }));
+        return;
+    }
+    if (!(await channelExists(channelId))) {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ error: 'Channel not found' }));
+        return;
+    }
+    await deleteChannelPermanently(channelId);
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true }));
+}
+
+// Requires admin. Lists every archived channel, regardless of the admin's own membership,
+// for the admin-only archived-channels management view.
+async function archived(req, res, user) {
+    const channels = await listArchivedChannels();
+    res.statusCode = 200;
+    res.end(JSON.stringify({ channels }));
 }
 
 // Requires the caller to be a member of the channel.
@@ -284,6 +351,30 @@ module.exports = async (req, res) => {
             const user = await requireUser(req, res);
             if (!user) return;
             await onlineMemberUuids(req, res, user);
+            return;
+        }
+        if (action === 'archive') {
+            const user = await requireAdmin(req, res);
+            if (!user) return;
+            await archive(req, res, user);
+            return;
+        }
+        if (action === 'restore') {
+            const user = await requireAdmin(req, res);
+            if (!user) return;
+            await restore(req, res, user);
+            return;
+        }
+        if (action === 'delete') {
+            const user = await requireAdmin(req, res);
+            if (!user) return;
+            await deletePermanently(req, res, user);
+            return;
+        }
+        if (action === 'archived') {
+            const user = await requireAdmin(req, res);
+            if (!user) return;
+            await archived(req, res, user);
             return;
         }
         res.statusCode = 404;
