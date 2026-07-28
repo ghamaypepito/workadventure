@@ -21,6 +21,7 @@
     let loading = $state(true);
     let error = $state("");
     let success = $state(false);
+    let submitting = $state(false);
 
     async function load() {
         loading = true;
@@ -48,19 +49,24 @@
     }
 
     async function confirmAdd() {
-        if (!email || selected.size === 0) return;
-        const failures: string[] = [];
-        for (const channelId of selected) {
-            const ok = await addChannelMembers(channelId, [email]);
-            if (!ok) {
-                const ch = channels.find((c) => c.id === channelId);
-                failures.push(ch?.name ?? channelId);
+        if (!email || selected.size === 0 || submitting) return;
+        submitting = true;
+        try {
+            const failures: string[] = [];
+            for (const channelId of selected) {
+                const ok = await addChannelMembers(channelId, [email]);
+                if (!ok) {
+                    const ch = channels.find((c) => c.id === channelId);
+                    failures.push(ch?.name ?? channelId);
+                }
             }
-        }
-        if (failures.length > 0) {
-            error = `Failed to add to: ${failures.join(", ")}`;
-        } else {
-            success = true;
+            if (failures.length > 0) {
+                error = `Failed to add to: ${failures.join(", ")}`;
+            } else {
+                success = true;
+            }
+        } finally {
+            submitting = false;
         }
     }
 </script>
@@ -95,10 +101,10 @@
             {#if !loading && !error && !success}
                 <button
                     class="px-3 py-1.5 rounded bg-emerald-500 text-[#0f172a] font-semibold"
-                    disabled={selected.size === 0}
+                    disabled={selected.size === 0 || submitting}
                     onclick={confirmAdd}
                 >
-                    Add
+                    {submitting ? "Adding…" : "Add"}
                 </button>
             {/if}
         </div>
