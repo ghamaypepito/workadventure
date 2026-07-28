@@ -25,6 +25,7 @@ import { Room } from "../../Connection/Room";
 import { LL } from "../../../i18n/i18n-svelte";
 import { inBbbStore, inJitsiStore, inOpenWebsite, isSpeakerStore, silentStore } from "../../Stores/MediaStore";
 import { currentLiveStreamingSpaceStore } from "../../Stores/MegaphoneStore";
+import { currentZoneNameStore } from "../../Stores/CurrentZoneStore";
 
 import type { Area } from "../Entity/Area";
 import { popupStore } from "../../Stores/PopupStore";
@@ -429,6 +430,7 @@ export class GameMapPropertiesListener {
             if (newValue) {
                 iframeListener.sendEnterEvent(newValue as string);
             }
+            currentZoneNameStore.set((newValue as string) || undefined);
         });
 
         this.gameMapFrontWrapper.onEnterLayer((newLayers) => {
