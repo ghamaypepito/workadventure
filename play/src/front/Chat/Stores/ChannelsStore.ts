@@ -57,12 +57,13 @@ function ensureSocialSignalSubscription(): void {
     });
 }
 
-export async function postChannelMessage(channelId: string, message: string): Promise<void> {
-    await fetch(`/api/channels/${channelId}/messages`, {
+export async function postChannelMessage(channelId: string, message: string): Promise<boolean> {
+    const res = await fetch(`/api/channels/${channelId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
     });
+    if (!res.ok) return false;
 
     // Instant badge for other online members: reuses the existing wave/ping socket
     // signal (see RoomConnection.emitSocialSignalRequest) rather than a new protobuf
@@ -79,6 +80,7 @@ export async function postChannelMessage(channelId: string, message: string): Pr
     } catch (e) {
         console.error("[channels] failed to send real-time notification signal", e);
     }
+    return true;
 }
 
 export async function markChannelRead(channelId: string): Promise<void> {
