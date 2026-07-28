@@ -48,6 +48,7 @@ import { lazyLoadPlayerCharacterTextures } from "../Entity/PlayerTexturesLoading
 import { lazyLoadPlayerCompanionTexture } from "../Companion/CompanionTexturesLoadingManager";
 import { iframeListener } from "../../Api/IframeListener";
 import { coWebsiteManager, coWebsites } from "../../Stores/CoWebsiteStore";
+import { currentZoneNameStore } from "../../Stores/CurrentZoneStore";
 import {
     ADMIN_URL,
     DEBUG_MODE,
@@ -908,6 +909,14 @@ export class GameScene extends DirtyScene {
         }
 
         this.reposition(true);
+
+        // Reset the zone name shown in the persistent top bar: a room transition (scene.stop()/scene.start())
+        // discards the old GameMapFrontWrapper without a final "zone disappeared" event, and this store is a
+        // module-level singleton that survives across scenes. Without this reset, a zone name from the
+        // previous room would keep showing until the player happens to enter a zone in the new room. Set
+        // before the new GameMapPropertiesListener is attached below, so it can't race with its first real
+        // zone update.
+        currentZoneNameStore.set(undefined);
 
         this.gameMapPropertiesListener = new GameMapPropertiesListener(this, this.gameMapFrontWrapper);
         this.gameMapPropertiesListener.register();
