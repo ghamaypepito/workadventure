@@ -418,7 +418,9 @@
     {/if}
     {#if $selectedChannelStore !== undefined}
         <div class="overflow-y-auto min-w-0">
-            <ChannelPanel channel={$selectedChannelStore} />
+            {#key $selectedChannelStore.id}
+                <ChannelPanel channelId={$selectedChannelStore.id} />
+            {/key}
         </div>
     {:else if $selectedRoomStore !== undefined}
         <div class="overflow-y-auto min-w-0">

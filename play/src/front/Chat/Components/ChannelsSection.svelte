@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { channelsStore, selectedChannelStore, refreshChannels } from "../Stores/ChannelsStore";
+    import { selectedRoomStore } from "../Stores/SelectRoomStore";
     import CreateChannelModal from "./CreateChannelModal.svelte";
 
     let displayChannels = $state(false);
@@ -18,6 +19,7 @@
     }
 
     function selectChannel(channel: (typeof $channelsStore)[number]) {
+        selectedRoomStore.set(undefined);
         selectedChannelStore.set(channel);
     }
 </script>
