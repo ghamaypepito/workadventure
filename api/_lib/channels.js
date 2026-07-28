@@ -97,10 +97,21 @@ async function isMember(id, email) {
     });
 }
 
+async function isArchived(id) {
+    return withRedis(REDIS_URL, async (client) => {
+        const archived = await client.command('HGET', `${CHANNEL_PREFIX}${id}`, 'archived');
+        return archived === '1';
+    });
+}
+
 async function archiveChannel(id) {
     return withRedis(REDIS_URL, async (client) => {
         const exists = await client.command('EXISTS', `${CHANNEL_PREFIX}${id}`);
         if (exists !== '1') return false;
+        // Self-healing: ensures channels created before wa:all-channel-ids existed (or by any
+        // other path that missed the index) still become visible in listArchivedChannels once
+        // archived - the only point at which an admin would ever need to find them there.
+        await client.command('SADD', ALL_CHANNELS_KEY, id);
         await client.command('HSET', `${CHANNEL_PREFIX}${id}`, 'archived', '1');
         return true;
     });
@@ -254,6 +265,7 @@ module.exports = {
     removeMembers,
     getMembers,
     isMember,
+    isArchived,
     getChannel,
     listChannelsForUser,
     appendMessage,
