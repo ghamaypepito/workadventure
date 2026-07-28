@@ -25,6 +25,7 @@
     let messages = $state<ChannelMessage[]>([]);
     let draft = $state("");
     let loading = $state(true);
+    let error = $state<string | undefined>(undefined);
 
     const isAdminUser =
         typeof window !== "undefined" && (window as unknown as { __waIsAdmin?: boolean }).__waIsAdmin === true;
@@ -32,6 +33,18 @@
     async function loadMessages() {
         loading = true;
         const res = await fetch(`/api/channels/${channelId}/messages?limit=50`);
+        if (!res.ok) {
+            loading = false;
+            if (res.status === 403) {
+                // Per the design doc: a non-member (e.g. just removed by an admin) is redirected
+                // out of the channel rather than left staring at a broken/empty panel.
+                error = "You've been removed from this channel";
+                selectedChannelStore.set(undefined);
+                return;
+            }
+            error = "Failed to load messages";
+            return;
+        }
         const data = await res.json();
         messages = data.messages;
         loading = false;
@@ -46,7 +59,12 @@
         if (!draft.trim()) return;
         const text = draft;
         draft = "";
-        await postChannelMessage(channelId, text);
+        const ok = await postChannelMessage(channelId, text);
+        if (!ok) {
+            error = "Failed to send message";
+            draft = text;
+            return;
+        }
         await loadMessages();
     }
 
@@ -88,6 +106,9 @@
             </button>
         </div>
         <div class="flex-1 overflow-y-auto px-3 py-2 flex flex-col gap-2">
+            {#if error}
+                <p class="text-sm text-red-400">{error}</p>
+            {/if}
             {#if loading}
                 <p class="text-sm text-white/50">Loading…</p>
             {:else}
