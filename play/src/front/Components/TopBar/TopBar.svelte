@@ -39,7 +39,7 @@
 <svelte:window onclick={closeAccountMenu} />
 
 <div
-    class="fixed top-0 inset-x-0 z-[350] h-12 bg-[#1c2a41] flex items-center px-4 gap-4 text-white pointer-events-none"
+    class="fixed top-0 inset-x-0 z-[1000] h-12 bg-[#1c2a41] flex items-center px-4 gap-4 text-white pointer-events-none"
 >
     <div class="flex-1 min-w-0 flex items-center pointer-events-auto">
         {#if $currentZoneNameStore}
