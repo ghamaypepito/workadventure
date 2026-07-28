@@ -47,7 +47,7 @@
     import { mapEditorSideBarWidthStore } from "./MapEditor/MapEditorSideBarWidthStore";
     import ActionBar from "./ActionBar/ActionBar.svelte";
     import ActionBarButton from "./ActionBar/ActionBarButton.svelte";
-    import MeetingViewToggle from "./ActionBar/MeetingViewToggle.svelte";
+    import TopBar from "./TopBar/TopBar.svelte";
     import { meetingViewStore } from "../Stores/MeetingViewStore";
 
     import HelpWebRtcSettingsPopup from "./HelpSettings/HelpWebRtcSettingsPopup.svelte";
@@ -272,7 +272,7 @@
             </div>
         </div>
     {/if}
-    <MeetingViewToggle />
+    <TopBar />
 
     {#if $highlightedEmbedScreen && $highlightFullScreen}
         <div class="w-full h-full fixed start-0 end-0 z-[310]">
