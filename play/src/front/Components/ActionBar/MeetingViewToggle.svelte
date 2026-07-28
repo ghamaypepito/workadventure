@@ -11,7 +11,7 @@
 {#if show}
     <button
         type="button"
-        class="fixed top-3 right-3 z-[330] pointer-events-auto flex items-center gap-2 rounded-lg bg-[#1c2a41]/90 backdrop-blur px-3 py-2 text-sm text-white hover:bg-white/10 transition-all"
+        class="pointer-events-auto flex items-center gap-2 rounded-lg bg-white/10 px-3 py-1.5 text-sm text-white hover:bg-white/20 transition-all"
         data-testid="meeting-view-toggle"
         onclick={() => meetingViewStore.update((v) => !v)}
     >
