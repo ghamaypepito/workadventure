@@ -6,6 +6,7 @@
         markChannelRead,
         postChannelMessage,
         setChannelNotificationLevel,
+        refreshChannels,
     } from "../Stores/ChannelsStore";
 
     interface Props {
@@ -76,11 +77,18 @@
     async function rename() {
         const newName = prompt("Rename channel", channel?.name);
         if (!newName || !newName.trim()) return;
-        await fetch(`/api/channels/${channelId}/rename`, {
+        const res = await fetch(`/api/channels/${channelId}/rename`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name: newName.trim() }),
         });
+        if (!res.ok) {
+            error = "Failed to rename channel";
+            return;
+        }
+        // Refresh the sidebar list; since `channel` above is derived live from channelsStore,
+        // this also updates the panel's own displayed name - no page reload required.
+        await refreshChannels();
     }
 
     function close() {
