@@ -140,6 +140,12 @@ async function membersList(req, res, user) {
 // identity endpoint in api/admission/[...admissionPath].js, which writes wa:uuid-email:*),
 // so the online-user-list's "Add to channel" action can target this specific user by email
 // even though it only has their uuid client-side.
+// Caveat: WA player uuids are per-browser (localStorage), not per-account, and the
+// wa:uuid-email:<uuid> mapping has a 30-day TTL with last-write-wins semantics. On a
+// shared/kiosk browser, a different person using that browser within 30 days of someone
+// else's last login can cause this uuid to resolve to the PREVIOUS account's email. Callers
+// that act on the resolved email (e.g. adding to a channel) should surface it to an admin
+// for confirmation rather than acting on it silently.
 async function resolveEmail(req, res, user) {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const uuid = url.searchParams.get('uuid');
