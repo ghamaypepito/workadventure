@@ -37,10 +37,15 @@
         if (!res.ok) {
             loading = false;
             if (res.status === 403) {
-                // Per the design doc: a non-member (e.g. just removed by an admin) is redirected
-                // out of the channel rather than left staring at a broken/empty panel.
+                // Per the design doc: a non-member (e.g. just removed by an admin) should see
+                // why the panel stopped working rather than a broken/empty panel. Do NOT clear
+                // selectedChannelStore here - RoomList gates ChannelPanel's mount on
+                // `$selectedChannelStore !== undefined`, so clearing it immediately would
+                // unmount this component and destroy the error state before it's ever shown.
+                // The channel is removed from the sidebar right away; the user leaves the panel
+                // via the existing back-arrow (close()), which clears the store then.
                 error = "You've been removed from this channel";
-                selectedChannelStore.set(undefined);
+                await refreshChannels();
                 return;
             }
             error = "Failed to load messages";
@@ -102,6 +107,14 @@
             <button class="text-white/60 hover:text-white" onclick={close}>&larr;</button>
             <div class="font-bold flex-1 truncate">Channel not found</div>
         </div>
+        {#if error}
+            <div class="flex-1 overflow-y-auto px-3 py-2 flex flex-col gap-2">
+                <p class="text-sm text-red-400">{error}</p>
+                <button class="self-start text-xs text-white/50 hover:text-white underline" onclick={close}>
+                    Back to channels
+                </button>
+            </div>
+        {/if}
     {:else}
         <div class="flex items-center gap-2 px-3 py-2 border-b border-white/10">
             <button class="text-white/60 hover:text-white" onclick={close}>&larr;</button>
