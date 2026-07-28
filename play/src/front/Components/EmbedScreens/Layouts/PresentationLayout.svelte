@@ -107,11 +107,18 @@
               ? "vertical"
               : "horizontal",
     );
+
+    // The persistent top bar (see TopBar.svelte) only exists in the main document, not inside
+    // the separate Document Picture-in-Picture window this component can also render into (see
+    // PictureInPicture.svelte's requestWindow/reparenting) - so the 48px clearance below only
+    // applies when NOT in that separate window, to avoid a dead band / overlap with the PiP
+    // window's own bottom action bar there.
+    let topOffsetClass = $derived(inPictureInPicture ? "top-0 h-full" : "top-12 h-[calc(100%-3rem)]");
 </script>
 
 {#if $proximityMeetingStore === true && !$inExternalServiceStore}
     <div
-        class="presentation-layout flex pointer-events-none h-[calc(100%-3rem)] w-full absolute top-12 mobile:mt-3"
+        class="presentation-layout flex pointer-events-none w-full absolute mobile:mt-3 {topOffsetClass}"
         class:flex-col={!pipHighlightLayoutEnabled || !pipHighlightLandscape}
         class:flex-row-reverse={pipHighlightLayoutEnabled && pipHighlightLandscape}
         style={inPictureInPicture && $highlightedEmbedScreen != undefined ? "height: calc(100vh - 80px);" : ""}
