@@ -243,7 +243,7 @@
                             const sent = scene.inviteManager?.requestMeetingInvitation(user.uuid);
                             if (sent) {
                                 try {
-                                    scene.playSound("meeting-in", 0.15);
+                                    scene.playMeetingInviteSound();
                                 } catch (error) {
                                     console.error("Failed to play sound: ", error);
                                     Sentry.captureException(error);
@@ -306,7 +306,7 @@
                             const sent = scene.inviteManager?.requestMeetingInvitation(user.uuid);
                             if (sent) {
                                 try {
-                                    scene.playSound("meeting-in", 0.15);
+                                    scene.playMeetingInviteSound();
                                 } catch (error) {
                                     console.error("Failed to play sound: ", error);
                                     Sentry.captureException(error);
