@@ -6,6 +6,7 @@
     interface SessionUser {
         name?: string;
         email?: string;
+        isAdmin?: boolean;
     }
 
     interface Props {
@@ -86,9 +87,17 @@
             </button>
             {#if showAccountMenu}
                 <div
-                    class="absolute right-0 top-full mt-1 min-w-[140px] rounded-lg bg-contrast/80 backdrop-blur-md p-1 shadow-lg"
+                    class="absolute right-0 top-full mt-1 min-w-[160px] rounded-lg bg-contrast/80 backdrop-blur-md p-1 shadow-lg"
                     onclick={(event) => event.stopPropagation()}
                 >
+                    {#if sessionUser.isAdmin}
+                        <a
+                            href="/admin/"
+                            class="block rounded-md px-3 py-2 text-sm text-white hover:bg-white/10 no-underline"
+                        >
+                            Admin dashboard
+                        </a>
+                    {/if}
                     <a
                         href="/api/auth/logout"
                         class="block rounded-md px-3 py-2 text-sm text-white hover:bg-white/10 no-underline"
