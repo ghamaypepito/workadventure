@@ -177,7 +177,11 @@ class LocalUserStore {
     }
 
     getRequestedCameraState(): boolean {
-        return JSON.parse(localStorage.getItem(requestedCameraStateKey) || "true");
+        // Defaults to off (not the upstream WorkAdventure default of "on") to cut LiveKit video
+        // bandwidth/participant-minute cost - video is by far the most expensive part of a call,
+        // and most proximity conversations don't need it. A user who explicitly turns their
+        // camera on still has that choice persisted here and honored on their next visit.
+        return JSON.parse(localStorage.getItem(requestedCameraStateKey) || "false");
     }
 
     setRequestedCameraState(value: boolean): void {
