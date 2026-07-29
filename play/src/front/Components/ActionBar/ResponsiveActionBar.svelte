@@ -92,8 +92,17 @@
     });
 </script>
 
+<!--
+    z-[1000] (not the original z-[301]): the fullscreen-highlight overlay in MainLayout.svelte
+    renders at z-[310] (the highlighted video) and z-[320]/z-[321] (the participant cameras side
+    panel + its toggle). A prior fix stopped this bar from being display:none'd during fullscreen
+    highlight, but at z-[301] it was still rendered underneath those overlays and visually
+    covered anyway. z-[1000] matches this session's other persistent-chrome elements (TopBar,
+    MainLayout's popup container) that also need to stay above transient fullscreen/toast
+    overlays.
+-->
 <div
-    class="@container/actions w-full z-[301] transition-all pointer-events-none bp-menu"
+    class="@container/actions w-full z-[1000] transition-all pointer-events-none bp-menu"
 >
     <div
         {@attach blocker}
