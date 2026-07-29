@@ -2,10 +2,7 @@
     import type { Snippet } from "svelte";
     import debug from "debug";
     import { onMount } from "svelte";
-    import { videoStreamElementsStore } from "../../Stores/PeerStore";
     import { blocker } from "../../Utils/screenBlocker";
-
-    import { highlightFullScreen } from "../../Stores/ActionsCamStore";
 
     const logger = debug("responsive-action-bar");
 
@@ -96,10 +93,7 @@
 </script>
 
 <div
-    class="@container/actions w-full z-[301] transition-all pointer-events-none bp-menu {$videoStreamElementsStore.length >
-        0 && $highlightFullScreen
-        ? 'hidden'
-        : ''}"
+    class="@container/actions w-full z-[301] transition-all pointer-events-none bp-menu"
 >
     <div
         {@attach blocker}
