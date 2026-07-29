@@ -7,6 +7,12 @@ const PLAY_URL = 'https://vings-workplace.vercel.app';
 const PUSHER_URL = 'https://play-production-7ae3.up.railway.app';
 const BACK_URL = 'https://back-production-76cc.up.railway.app';
 const MAP_STORAGE_URL = 'https://map-storage-production.up.railway.app';
+// Short deployment label shown at the top-left of the persistent top bar (see TopBar.svelte),
+// to visually distinguish this deployment from other WorkAdventure instances built off the
+// same repo (e.g. pxlcode-workplace). Deliberately a separate global, not a field on windowEnv
+// below - that object is validated against a strict schema (EnvironmentVariable.ts) and an
+// unrecognized field there would need touching that schema for no functional reason.
+const OFFICE_NAME = 'ConnectiumAI Office';
 
 // Inject window.env config (replaces server-side Mustache {{{ script }}} block)
 const windowEnv = {
@@ -84,7 +90,9 @@ const windowEnv = {
 
 // The play service injects both window.env and window.capabilities into the same <script> block.
 // On Vercel (static SPA), we must bake both in. window.capabilities = {} mirrors no-admin-API behavior.
-const windowEnvJs = `window.env = ${JSON.stringify(windowEnv)};\nwindow.capabilities = {};`;
+const windowEnvJs = `window.env = ${JSON.stringify(
+    windowEnv,
+)};\nwindow.capabilities = {};\nwindow.__waOfficeName = ${JSON.stringify(OFFICE_NAME)};`;
 
 // Replace the triple-stash {{{ script }}} block (the template already has a <script> wrapper)
 html = html.replace(/\{\{\{[^}]*script[^}]*\}\}\}/g, windowEnvJs);
