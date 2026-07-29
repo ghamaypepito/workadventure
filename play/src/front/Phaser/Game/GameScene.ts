@@ -498,6 +498,7 @@ export class GameScene extends DirtyScene {
         this.load.audio("audio-cloud", "/resources/objects/cloud.mp3");
         this.load.audio("new-message", "/resources/objects/new-message.mp3");
         this.load.audio("meeting-in", "/resources/objects/meeting-in.wav");
+        this.load.audio("meeting-invite", "/resources/objects/meeting-invite.wav");
         this.load.audio("meeting-out", "/resources/objects/meeting-out.wav");
         this.load.audio("wave", "/resources/objects/webrtc-out-ding.mp3");
         this.load.audio("ping-bell", "/resources/objects/webrtc-in-ding.mp3");
@@ -1155,6 +1156,16 @@ export class GameScene extends DirtyScene {
 
     public playMeetingInSound() {
         this.playSound(`meeting-in`);
+    }
+
+    /**
+     * Distinct from playMeetingInSound() (which is also used for generic proximity
+     * bubble-join, via ProximityChatRoom.ts) - this plays only for the meeting-invitation
+     * flow specifically (both the sender's "invite sent" confirmation and the receiver's
+     * "you've been invited" notification), so it doesn't get confused with the bubble sound.
+     */
+    public playMeetingInviteSound() {
+        this.playSound(`meeting-invite`, 0.4);
     }
 
     public playMeetingOutSound() {

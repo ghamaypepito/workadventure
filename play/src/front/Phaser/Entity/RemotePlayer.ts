@@ -321,7 +321,7 @@ export class RemotePlayer extends Character implements ActivatableInterface {
                 const sent = this.scene.inviteManager?.requestMeetingInvitation(this.userUuid, this.userId);
                 if (sent) {
                     try {
-                        this.scene.playSound("meeting-in", 0.15);
+                        this.scene.playMeetingInviteSound();
                     } catch (error) {
                         Sentry.captureException(error);
                     }

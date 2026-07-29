@@ -34,10 +34,12 @@ export class InviteManager {
         this.subscriptions.push(
             this.connection.meetingInvitationRequestReceivedStream.subscribe((payload) => {
                 meetingInvitationRequestStore.set(payload);
-                // Play a short sound to notify the user that a meeting request has arrived
+                // Play a distinct sound (not the generic bubble-join meeting-in sound) so an
+                // incoming meeting invitation is unmistakable from just walking into a proximity
+                // conversation.
                 const scene = gameManager.getCurrentGameScene();
                 if (scene) {
-                    scene.playMeetingInSound();
+                    scene.playMeetingInviteSound();
                 }
             }),
         );
@@ -111,7 +113,9 @@ export class InviteManager {
                 );
                 const scene = gameManager.getCurrentGameScene();
                 if (scene) {
-                    scene.playSound(kind === "wave" ? "wave" : "ping-bell", 0.15);
+                    // Raised from 0.15 (barely audible) to 0.6 so a wave/ping is actually
+                    // noticeable over ambient game/call audio.
+                    scene.playSound(kind === "wave" ? "wave" : "ping-bell", 0.6);
                     const text =
                         kind === "wave"
                             ? get(LL).chat.socialSignal.wavedToYou({ name: payload.senderName })
