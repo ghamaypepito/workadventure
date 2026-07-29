@@ -292,17 +292,15 @@
                 class:invisible={!highlightParticipantCamerasListOpen}
                 class:visible={highlightParticipantCamerasListOpen}
             >
-                <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 overflow-x-hidden">
-                    {#each [...$streamableCollectionStore.values()] as videoBox (videoBox.uniqueId)}
-                        {#if videoBox.uniqueId !== $highlightedEmbedScreen?.uniqueId}
-                            <div class="h-[135px] w-full shrink-0">
-                                <MediaBox {videoBox} fullScreen={false} inHighlightFullscreenParticipantList={true} />
-                            </div>
-                        {/if}
-                    {/each}
-                </div>
+                <!--
+                    Moved above the scrollable participant list (was below it, as the panel's
+                    last child) - the main action bar was raised to z-[1000] to fix it being
+                    covered during fullscreen highlight, but that same bar sitting at the bottom
+                    of the screen now visually collides with this panel's own bottom-anchored
+                    buttons. Placing them at the top instead keeps them clear of that overlap.
+                -->
                 <div
-                    class="flex-shrink-0 border-t border-white/20 mt-1 pt-1 pb-2 px-1 flex flex-col gap-0.5"
+                    class="flex-shrink-0 border-b border-white/20 mb-1 pt-2 pb-1 px-1 flex flex-col gap-0.5"
                     data-testid="highlight-fullscreen-participant-list-actions"
                 >
                     <ActionBarButton
@@ -329,6 +327,15 @@
                     >
                         <IconArrowsMinimize font-size="20" />
                     </ActionBarButton>
+                </div>
+                <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 overflow-x-hidden">
+                    {#each [...$streamableCollectionStore.values()] as videoBox (videoBox.uniqueId)}
+                        {#if videoBox.uniqueId !== $highlightedEmbedScreen?.uniqueId}
+                            <div class="h-[135px] w-full shrink-0">
+                                <MediaBox {videoBox} fullScreen={false} inHighlightFullscreenParticipantList={true} />
+                            </div>
+                        {/if}
+                    {/each}
                 </div>
             </div>
 
