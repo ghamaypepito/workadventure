@@ -45,6 +45,9 @@
 
     const sessionUser = getSessionUser();
 
+    const officeName =
+        typeof window !== "undefined" ? (window as unknown as { __waOfficeName?: string }).__waOfficeName : undefined;
+
     let showAccountMenu = $state(false);
 
     function toggleAccountMenu() {
@@ -62,7 +65,10 @@
     class="absolute top-0 z-[1000] h-12 bg-[#1c2a41] flex items-center px-4 gap-4 text-white pointer-events-auto"
     style="inset-inline-start: {marginLeft}px; inset-inline-end: {marginRight}px;"
 >
-    <div class="flex-1 min-w-0 flex items-center">
+    <div class="flex-1 min-w-0 flex items-center gap-3">
+        {#if officeName}
+            <span class="text-sm font-bold border border-white/20 rounded-lg px-2 py-1 truncate">{officeName}</span>
+        {/if}
         {#if $currentZoneNameStore}
             <span class="text-sm truncate opacity-80">{$currentZoneNameStore}</span>
         {/if}
