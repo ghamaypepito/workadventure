@@ -182,6 +182,9 @@
         if (participantListAutoHideTimer) {
             clearTimeout(participantListAutoHideTimer);
         }
+        if (exitFullscreenArmTimer) {
+            clearTimeout(exitFullscreenArmTimer);
+        }
     });
 
     let marginLeft = $derived($chatVisibilityStore ? $chatSidebarWidthStore : 0);
@@ -234,8 +237,71 @@
         analyticsClient.openUserList();
     }
 
+    // Guards against exiting fullscreen from a stray click while the cursor is just passing
+    // over the button (e.g. moving toward the browser chrome) - a real screen recording showed
+    // the cursor sweeping across this exact spot and triggering an exit the user didn't intend.
+    // The button only becomes clickable after the cursor has rested on it for a short moment.
+    const EXIT_FULLSCREEN_ARM_DELAY_MS = 250;
+    let exitFullscreenArmed = false;
+    let exitFullscreenArmTimer: ReturnType<typeof setTimeout> | undefined;
+
+    function armExitFullscreen() {
+        if (exitFullscreenArmTimer) {
+            clearTimeout(exitFullscreenArmTimer);
+        }
+        exitFullscreenArmTimer = setTimeout(() => {
+            exitFullscreenArmed = true;
+            exitFullscreenArmTimer = undefined;
+        }, EXIT_FULLSCREEN_ARM_DELAY_MS);
+    }
+
+    function disarmExitFullscreen() {
+        if (exitFullscreenArmTimer) {
+            clearTimeout(exitFullscreenArmTimer);
+            exitFullscreenArmTimer = undefined;
+        }
+        exitFullscreenArmed = false;
+    }
+
     function exitHighlightFullscreen() {
+        if (!exitFullscreenArmed) {
+            return;
+        }
+        disarmExitFullscreen();
         highlightFullScreen.set(false);
+    }
+
+    // Touch/pen taps don't fire a lingering pointerenter before the click (there's no hover
+    // phase), so only mouse pointers are held to the dwell requirement above - a tap arms
+    // instantly on pointerdown so touch users can still exit fullscreen with a single tap.
+    function exitFullscreenArmGuard(node: HTMLElement) {
+        const onPointerEnter = (event: PointerEvent) => {
+            if (event.pointerType === "mouse") {
+                armExitFullscreen();
+            } else {
+                exitFullscreenArmed = true;
+            }
+        };
+        const onPointerLeave = (event: PointerEvent) => {
+            if (event.pointerType === "mouse") {
+                disarmExitFullscreen();
+            }
+        };
+        const onPointerDown = (event: PointerEvent) => {
+            if (event.pointerType !== "mouse") {
+                exitFullscreenArmed = true;
+            }
+        };
+        node.addEventListener("pointerenter", onPointerEnter);
+        node.addEventListener("pointerleave", onPointerLeave);
+        node.addEventListener("pointerdown", onPointerDown);
+        return {
+            destroy() {
+                node.removeEventListener("pointerenter", onPointerEnter);
+                node.removeEventListener("pointerleave", onPointerLeave);
+                node.removeEventListener("pointerdown", onPointerDown);
+            },
+        };
     }
 </script>
 
@@ -323,6 +389,7 @@
                         context="menu"
                         label={$LL.actionbar.participantExitFullscreen()}
                         onclick={exitHighlightFullscreen}
+                        action={exitFullscreenArmGuard}
                         dataTestId="highlight-fullscreen-exit"
                     >
                         <IconArrowsMinimize font-size="20" />
