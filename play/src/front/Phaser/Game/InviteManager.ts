@@ -113,9 +113,10 @@ export class InviteManager {
                 );
                 const scene = gameManager.getCurrentGameScene();
                 if (scene) {
-                    // Raised to 1.0 (Phaser's max linear gain) - 0.15 and then 0.6 were both
-                    // reported as still too quiet over ambient game/call audio.
-                    scene.playSound(kind === "wave" ? "wave" : "ping-bell", 1.0);
+                    // Boosted past unity gain (2.0) - 0.15, 0.6, and 1.0 were all reported as
+                    // still too quiet over ambient game/call audio. Web Audio GainNode accepts
+                    // values above 1.0, so this doubles the sample's amplitude in software.
+                    scene.playSound(kind === "wave" ? "wave" : "ping-bell", 2.0);
                     const text =
                         kind === "wave"
                             ? get(LL).chat.socialSignal.wavedToYou({ name: payload.senderName })
