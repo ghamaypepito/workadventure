@@ -113,9 +113,9 @@ export class InviteManager {
                 );
                 const scene = gameManager.getCurrentGameScene();
                 if (scene) {
-                    // Raised from 0.15 (barely audible) to 0.6 so a wave/ping is actually
-                    // noticeable over ambient game/call audio.
-                    scene.playSound(kind === "wave" ? "wave" : "ping-bell", 0.6);
+                    // Raised to 1.0 (Phaser's max linear gain) - 0.15 and then 0.6 were both
+                    // reported as still too quiet over ambient game/call audio.
+                    scene.playSound(kind === "wave" ? "wave" : "ping-bell", 1.0);
                     const text =
                         kind === "wave"
                             ? get(LL).chat.socialSignal.wavedToYou({ name: payload.senderName })
