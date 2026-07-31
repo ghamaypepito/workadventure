@@ -5,7 +5,7 @@ const { setActiveSession } = require('../_lib/sessionRegistry');
 
 // See google-callback.js for the full rationale behind both of these - identical pattern, kept
 // as a separate local copy per file rather than a shared module (see google-callback.js).
-const PUSHER_URL = 'https://play-production-5dcd.up.railway.app';
+const PUSHER_URL = 'https://play-production-7ae3.up.railway.app';
 
 function signMatrixBridgeToken(email) {
     const secret = process.env.MATRIX_BRIDGE_SECRET;

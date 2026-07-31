@@ -6,7 +6,7 @@ const { setActiveSession } = require('../_lib/sessionRegistry');
 // Same value as PLAY_URL in process-template.cjs for this branch - hardcoded per-branch here too
 // since this file (like process-template.cjs) is one of the small set of files this deployment's
 // two branches (pxlcode-workplace / master) intentionally keep different.
-const PUSHER_URL = 'https://play-production-5dcd.up.railway.app';
+const PUSHER_URL = 'https://play-production-7ae3.up.railway.app';
 
 // Signs a short-lived {email, exp} token for the pusher /custom-sso-matrix-login bridge, using a
 // dedicated secret (MATRIX_BRIDGE_SECRET) separate from this file's own SESSION_SECRET - a leak
