@@ -99,6 +99,31 @@ export const openDirectChatRoom = async (chatID: string) => {
     }
 };
 
+/**
+ * Sends a direct message to chatID without opening the chat panel - used for the wave/ping
+ * toast's canned quick-reply, where popping the whole chat UI open would be more disruptive
+ * than the one-line reply itself.
+ */
+export const sendDirectMessage = async (chatID: string, message: string): Promise<void> => {
+    if (!get(userIsConnected)) {
+        // Unlike openDirectChatRoom (which prompts a login modal - reasonable when the user is
+        // about to look at a chat panel), this helper is used for a fire-and-forget quick-reply
+        // that has no UI of its own to prompt from. Throwing lets the caller's try/catch treat
+        // "not connected" as a real send failure instead of a silent, indistinguishable no-op -
+        // guests/anonymous users (userIsConnected tracks SSO/OpenID login, not toast eligibility)
+        // must not see a false "sent" confirmation.
+        throw new Error("Cannot send direct message: user is not connected");
+    }
+    const chatConnection = await gameManager.getChatConnection();
+    let room = chatConnection.getDirectRoomFor(chatID);
+    if (!room) room = await chatConnection.createDirectRoom(chatID);
+    if (!room) throw new Error("Failed to create room");
+    if (get(room.myMembership) === "invite") {
+        room.joinRoom().catch((error: unknown) => console.error(error));
+    }
+    room.sendMessage(message);
+};
+
 export const openChatRoom = async (roomId: string) => {
     try {
         if (!get(userIsConnected)) {

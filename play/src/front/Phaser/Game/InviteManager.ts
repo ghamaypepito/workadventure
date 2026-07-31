@@ -108,7 +108,13 @@ export class InviteManager {
                 const toastId = `social-signal-${kind}-${Date.now()}`;
                 toastStore.addToast(
                     kind === "wave" ? WaveReceivedToast : PingReceivedToast,
-                    { actorName: payload.senderName, toastUuid: toastId },
+                    {
+                        actorName: payload.senderName,
+                        senderUserUuid: payload.senderUserUuid,
+                        senderUserId: payload.senderUserId,
+                        receivedAt: Date.now(),
+                        toastUuid: toastId,
+                    },
                     toastId,
                 );
                 const scene = gameManager.getCurrentGameScene();
@@ -214,9 +220,12 @@ export class InviteManager {
 
         this.connection.emitSocialSignalRequest(receiverUserUuid, kind, receiverUserId);
 
-        // Log the send side too (item 3: sender sees "You waved at X" / "You pinged X").
+        // Log the send side too (item 3: sender sees "You waved at X" / "You pinged X"), and play
+        // the same sound the receiver hears so the sender gets audible confirmation their
+        // wave/ping actually went out.
         const scene = gameManager.getCurrentGameScene();
         if (scene) {
+            scene.playSound(kind === "wave" ? "wave" : "ping-bell", 2.0);
             const text =
                 kind === "wave"
                     ? get(LL).chat.socialSignal.youWavedAt({ name: receiverUserName })
