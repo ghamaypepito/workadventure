@@ -94,7 +94,8 @@ module.exports = async (req, res) => {
         if (bridgeToken) {
             const bridgeUrl = new URL('/custom-sso-matrix-login', PUSHER_URL);
             bridgeUrl.searchParams.set('token', bridgeToken);
-            bridgeUrl.searchParams.set('providerId', 'microsoft');
+            // See google-callback.js - Synapse namespaces this as "oidc-<idp_id>" internally.
+            bridgeUrl.searchParams.set('providerId', 'oidc-microsoft');
             bridgeUrl.searchParams.set('playUri', returnTo);
             res.setHeader('Location', bridgeUrl.toString());
         } else {

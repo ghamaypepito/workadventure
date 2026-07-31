@@ -104,7 +104,10 @@ module.exports = async (req, res) => {
         if (bridgeToken) {
             const bridgeUrl = new URL('/custom-sso-matrix-login', PUSHER_URL);
             bridgeUrl.searchParams.set('token', bridgeToken);
-            bridgeUrl.searchParams.set('providerId', 'google');
+            // Synapse namespaces generic OIDC providers as "oidc-<idp_id>" internally regardless
+            // of the idp_id value in homeserver.template.yaml (confirmed by hitting
+            // /_matrix/client/v3/login - plain "google" 404s, "oidc-google" redirects correctly).
+            bridgeUrl.searchParams.set('providerId', 'oidc-google');
             bridgeUrl.searchParams.set('playUri', returnTo);
             res.setHeader('Location', bridgeUrl.toString());
         } else {
