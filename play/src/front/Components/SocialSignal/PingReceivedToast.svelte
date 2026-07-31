@@ -16,6 +16,10 @@
     let { actorName, senderUserUuid, senderUserId, receivedAt, toastUuid = "" }: Props = $props();
 
     let quickReplyState: "idle" | "sending" | "sent" | "failed" = $state("idle");
+    // Set when "Message" is clicked but no chatID could be resolved - shown inline instead of
+    // letting the toast close with nothing visibly having happened (same failure-visibility
+    // fix already applied to the quick-reply's "failed" state below).
+    let messageUnavailable = $state(false);
 
     function resolveChatID(): string | undefined {
         return gameManager
@@ -32,9 +36,13 @@
 
     function message() {
         const chatID = resolveChatID();
-        if (chatID) {
-            openDirectChatRoom(chatID).catch((error) => console.error("Failed to open direct chat room:", error));
+        if (!chatID) {
+            // chatID is resolved lazily on click, so it can genuinely be unavailable here. Keep
+            // the toast open and show a clear failure state rather than closing silently.
+            messageUnavailable = true;
+            return;
         }
+        openDirectChatRoom(chatID).catch((error) => console.error("Failed to open direct chat room:", error));
         toastStore.removeToast(toastUuid);
     }
 
@@ -49,6 +57,11 @@
         }
         quickReplyState = "sending";
         try {
+            // NOTE: "sent" here means sendDirectMessage() didn't throw - it does not guarantee the
+            // message actually reached the server. See the KNOWN LIMITATION doc comment on
+            // sendDirectMessage (Chat/Utils.ts) for why a genuine post-room-creation send failure
+            // can't currently surface as "failed" (MatrixChatRoom.sendMessage is fire-and-forget
+            // by design, and that's a shared interface out of scope to widen for this batch).
             await sendDirectMessage(chatID, "Will be there in a while");
             quickReplyState = "sent";
         } catch (error) {
@@ -63,6 +76,9 @@
     {#snippet buttons()}
         <button type="button" class="btn btn-light btn-ghost text-sm" onclick={pingBack}> 🔔 Ping back </button>
         <button type="button" class="btn btn-light btn-ghost text-sm" onclick={message}> Message </button>
+        {#if messageUnavailable}
+            <span class="text-sm opacity-70">Can't message - unavailable</span>
+        {/if}
         {#if quickReplyState === "sent"}
             <span class="text-sm opacity-70">Sent ✓</span>
         {:else}

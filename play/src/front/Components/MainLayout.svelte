@@ -13,7 +13,6 @@
     import { modalVisibilityStore, roomListVisibilityStore, showLimitRoomModalStore } from "../Stores/ModalStore";
     import { actionsMenuStore } from "../Stores/ActionsMenuStore";
     import { wokaMenuStore } from "../Stores/WokaMenuStore";
-    import { hoverPreviewStore } from "../Stores/HoverPreviewStore";
     import { showDesktopCapturerSourcePicker } from "../Stores/ScreenSharingStore";
     import { uiWebsitesStore } from "../Stores/UIWebsiteStore";
     import { coWebsites, windowSize } from "../Stores/CoWebsiteStore";
@@ -504,9 +503,15 @@
                 </div>
             {/if}
 
-            {#if $hoverPreviewStore}
-                <PersonHoverPreview />
-            {/if}
+            <!--
+                Always mounted (not gated on $hoverPreviewStore here) so its onMount can attach a
+                single, persistent canvas-mouseleave listener for the app's lifetime (see Fix 3 in
+                PersonHoverPreview.svelte) - the component's own internal {#if $hoverPreviewStore}
+                still controls whether anything actually renders. This also removes what was a
+                redundant duplicate guard (the same check twice, once here and once inside the
+                component, with no key/transition depending on the outer one).
+            -->
+            <PersonHoverPreview />
 
             {#if $showRecordingList}
                 <RecordingsListModal />
@@ -548,9 +553,18 @@
 
             <ExternalComponents zone="popup" />
             {#if $requestVisitCardsStore || $wokaMenuStore || $actionsMenuStore || $meetingInvitationRequestStore}
+                <!--
+                    md:top-48 (was md:top-12): toasts render in the same top-right corner
+                    (top-12 right-2, z-[1100] - see below), and a wave/ping toast's message +
+                    optional timestamp + buttons row is typically ~100-140px tall, so starting
+                    this wrapper at the same top-12 let a toast cover WokaMenu's own close button
+                    (near the top of its card) - the exact bug Task 6 fixed, just relocated.
+                    top-48 (192px) clears a toast's typical height so the two no longer occupy the
+                    same vertical band in the common case.
+                -->
                 <div
                     transition:fly={{ x: 210, duration: 500 }}
-                    class="absolute bottom-0 w-full h-fit max-h-[calc(100dvh-100px)] md:top-12 md:right-0 md:w-fit flex flex-col gap-2 items-end justify-start p-0 m-0 mr-3 overflow-y-auto no-scroll-bar"
+                    class="absolute bottom-0 w-full h-fit max-h-[calc(100dvh-100px)] md:top-48 md:right-0 md:w-fit flex flex-col gap-2 items-end justify-start p-0 m-0 mr-3 overflow-y-auto no-scroll-bar"
                 >
                     {#if $requestVisitCardsStore}
                         <VisitCard visitCardUrl={$requestVisitCardsStore} />
