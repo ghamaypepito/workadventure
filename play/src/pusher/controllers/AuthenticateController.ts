@@ -1,4 +1,5 @@
 import fs from "fs";
+import crypto from "crypto";
 import { v4 } from "uuid";
 import type { MeResponse, RegisterData } from "@workadventure/messages";
 import { MeRequest } from "@workadventure/messages";
@@ -10,7 +11,13 @@ import Debug from "debug";
 import type { AuthTokenData } from "../services/JWTTokenManager";
 import { jwtTokenManager } from "../services/JWTTokenManager";
 import { openIDClient } from "../services/OpenIDClient";
-import { DISABLE_ANONYMOUS, FRONT_URL, MATRIX_PUBLIC_URI, PUSHER_URL } from "../enums/EnvironmentVariable";
+import {
+    DISABLE_ANONYMOUS,
+    FRONT_URL,
+    MATRIX_BRIDGE_SECRET,
+    MATRIX_PUBLIC_URI,
+    PUSHER_URL,
+} from "../enums/EnvironmentVariable";
 import { adminService } from "../services/AdminService";
 import { validateQuery } from "../services/QueryValidator";
 import { VerifyDomainService } from "../services/verifyDomain/VerifyDomainService";
@@ -64,11 +71,49 @@ export class AuthenticateController extends BaseHttpController {
         this.me();
         this.openIDCallback();
         this.matrixCallback();
+        this.customSsoMatrixLogin();
         this.logoutCallback();
         this.register();
         this.anonymLogin();
         this.profileCallback();
         this.logoutUser();
+    }
+
+    /**
+     * Verifies an HMAC-SHA256-signed {email, exp} token, matching the scheme this deployment's
+     * custom SSO gate (Vercel `api/_lib/session.js`'s signSession/verifySession) already uses -
+     * same shape, different secret (MATRIX_BRIDGE_SECRET, not SESSION_SECRET), so a leak of one
+     * doesn't compromise the other. Returns the verified email, or null if the token is missing,
+     * malformed, has a bad signature, or has expired.
+     */
+    private verifyMatrixBridgeToken(token: string): string | null {
+        if (!MATRIX_BRIDGE_SECRET) {
+            return null;
+        }
+        const parts = token.split(".");
+        if (parts.length !== 2) {
+            return null;
+        }
+        const [payloadB64, sigB64] = parts;
+        const expectedSig = crypto.createHmac("sha256", MATRIX_BRIDGE_SECRET).update(payloadB64).digest("base64url");
+        const sigBuf = Buffer.from(sigB64);
+        const expectedBuf = Buffer.from(expectedSig);
+        if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+            return null;
+        }
+        let payload: { email?: unknown; exp?: unknown };
+        try {
+            payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString("utf8"));
+        } catch {
+            return null;
+        }
+        if (typeof payload.email !== "string" || typeof payload.exp !== "number") {
+            return null;
+        }
+        if (Date.now() > payload.exp) {
+            return null;
+        }
+        return payload.email;
     }
 
     private openIDLogin(): void {
@@ -400,6 +445,96 @@ export class AuthenticateController extends BaseHttpController {
 
             const html = Mustache.render(this.redirectToPlayFile, {
                 playUri: playUriUrl.toString(),
+            });
+            res.type("html").send(html);
+            return;
+        });
+    }
+
+    /**
+     * Bridges this deployment's custom SSO gate (Google/Microsoft login handled entirely by
+     * Vercel serverless functions, outside this pusher service) into Matrix login, without
+     * needing WorkAdventure's full generic-OIDC-provider + admin-backend system that
+     * /login-screen's openIDClient.authorizationUrl(...) requires (this deployment has neither).
+     *
+     * The caller (a Vercel callback function that has ALREADY independently verified the user's
+     * Google/Microsoft identity token server-side) proves it via a short-lived HMAC-signed token
+     * rather than an open `email` query param - otherwise anyone could call this endpoint with an
+     * arbitrary email and get a pusher authToken minted for that identity (see
+     * verifyMatrixBridgeToken). The subsequent Matrix login itself is independently re-verified
+     * by Synapse's own Google/Microsoft OIDC providers, so this token only grants the pusher-side
+     * authToken/session, not a Matrix session on its own.
+     *
+     * From here on this reuses the exact same Synapse-redirect-with-authToken-in-localStorage
+     * mechanism /openid-callback already uses further up in this file - same redirectToMatrixFile
+     * template, same matrixRedirectUrl construction - just entered from a different starting
+     * point.
+     */
+    private customSsoMatrixLogin(): void {
+        this.app.get("/custom-sso-matrix-login", async (req, res) => {
+            debug(`AuthenticateController => [${req.method}] ${req.originalUrl} — IP: ${req.ip} — Time: ${Date.now()}`);
+            const query = validateQuery(
+                req,
+                res,
+                z.object({
+                    token: z.string(),
+                    playUri: z.string(),
+                    providerId: z.string().optional(),
+                }),
+            );
+            if (query === undefined) {
+                return;
+            }
+
+            const email = this.verifyMatrixBridgeToken(query.token);
+            if (!email) {
+                res.status(403);
+                res.send("Invalid or expired bridge token");
+                return;
+            }
+
+            // Same open-redirect protection /login-screen already applies to its own playUri.
+            const verifyDomainService_ = VerifyDomainService.get(await adminService.getCapabilities());
+            const verifyDomainResult = await verifyDomainService_.verifyDomain(query.playUri);
+            if (!verifyDomainResult) {
+                res.status(403);
+                res.send("Unauthorized domain in playUri");
+                return;
+            }
+
+            if (!MATRIX_PUBLIC_URI) {
+                res.status(500);
+                res.send("Matrix is not configured on this deployment");
+                return;
+            }
+
+            const matrixUserId = matrixProvider.getBareMatrixIdFromEmail(email);
+            const authToken = await jwtTokenManager.createAuthToken(
+                email,
+                undefined,
+                undefined,
+                undefined,
+                [],
+                matrixUserId,
+            );
+
+            // /matrix-callback (above) reads this same cookie once Synapse redirects back.
+            res.cookie("playUri", query.playUri, {
+                httpOnly: true,
+                secure: req.secure,
+            });
+
+            const matrixCallbackUrl = new URL("/matrix-callback", PUSHER_URL).toString();
+            let redirectPath = "/_matrix/client/v3/login/sso/redirect";
+            if (query.providerId) {
+                redirectPath += "/" + query.providerId;
+            }
+            const matrixRedirectUrl = new URL(redirectPath, MATRIX_PUBLIC_URI);
+            matrixRedirectUrl.searchParams.append("redirectUrl", matrixCallbackUrl);
+
+            const html = Mustache.render(this.redirectToMatrixFile, {
+                authToken,
+                matrixRedirectUrl: matrixRedirectUrl.toString(),
             });
             res.type("html").send(html);
             return;

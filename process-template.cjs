@@ -149,8 +149,8 @@ const ssoGateScript = `<script>
       '<h1 style="font-size:1.8rem;margin-bottom:0.5rem;">Sign in to continue</h1>' +
       '<p style="color:#94a3b8;margin-bottom:2rem;">Sign in with your work account before creating your character.</p>' +
       '<div style="display:flex;flex-direction:column;gap:0.75rem;width:100%;max-width:320px;">' +
-      '<a href="/api/auth/google" style="background:#fff;color:#1f2937;padding:0.75rem 1rem;border-radius:8px;text-decoration:none;font-weight:600;">Sign in with Google</a>' +
-      '<a href="/api/auth/microsoft" style="background:#2564cf;color:#fff;padding:0.75rem 1rem;border-radius:8px;text-decoration:none;font-weight:600;">Sign in with Microsoft</a>' +
+      '<a href="/api/auth/google?returnTo=' + encodeURIComponent(window.location.href) + '" style="background:#fff;color:#1f2937;padding:0.75rem 1rem;border-radius:8px;text-decoration:none;font-weight:600;">Sign in with Google</a>' +
+      '<a href="/api/auth/microsoft?returnTo=' + encodeURIComponent(window.location.href) + '" style="background:#2564cf;color:#fff;padding:0.75rem 1rem;border-radius:8px;text-decoration:none;font-weight:600;">Sign in with Microsoft</a>' +
       '<button id="sso-gate-guest" style="background:transparent;color:#94a3b8;border:1px solid #334155;padding:0.75rem 1rem;border-radius:8px;font-weight:600;cursor:pointer;">Continue as guest</button>' +
       '</div>';
     document.body.appendChild(overlay);

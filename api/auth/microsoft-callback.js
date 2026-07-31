@@ -1,7 +1,19 @@
 const crypto = require('crypto');
-const { signSession, parseCookies, baseUrl } = require('../_lib/session');
+const { signSession, parseCookies, baseUrl, b64url } = require('../_lib/session');
 const { getAccessStatus, addPendingRequest } = require('../_lib/admin');
 const { setActiveSession } = require('../_lib/sessionRegistry');
+
+// See google-callback.js for the full rationale behind both of these - identical pattern, kept
+// as a separate local copy per file rather than a shared module (see google-callback.js).
+const PUSHER_URL = 'https://play-production-5dcd.up.railway.app';
+
+function signMatrixBridgeToken(email) {
+    const secret = process.env.MATRIX_BRIDGE_SECRET;
+    if (!secret) return null;
+    const payload = b64url(Buffer.from(JSON.stringify({ email, exp: Date.now() + 60_000 })));
+    const sig = b64url(crypto.createHmac('sha256', secret).update(payload).digest());
+    return `${payload}.${sig}`;
+}
 
 module.exports = async (req, res) => {
     const url = new URL(req.url, baseUrl(req));
@@ -66,14 +78,28 @@ module.exports = async (req, res) => {
             exp: Date.now() + 1000 * 60 * 60 * 24 * 7,
         });
 
-        res.setHeader('Set-Cookie', [
+        const clearedCookies = [
             `wa_session=${session}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=604800`,
             `wa_user=${encodeURIComponent(JSON.stringify({ name, email, provider: 'microsoft', status, isAdmin: status === 'admin' }))}; Path=/; Secure; SameSite=Lax; Max-Age=604800`,
             `oauth_state=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
-        ]);
+            `return_to=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+        ];
+
+        const returnTo = cookies.return_to;
+        const bridgeToken = status !== 'pending' && returnTo ? signMatrixBridgeToken(email) : null;
+
+        res.setHeader('Set-Cookie', clearedCookies);
 
         res.statusCode = 302;
-        res.setHeader('Location', '/');
+        if (bridgeToken) {
+            const bridgeUrl = new URL('/custom-sso-matrix-login', PUSHER_URL);
+            bridgeUrl.searchParams.set('token', bridgeToken);
+            bridgeUrl.searchParams.set('providerId', 'microsoft');
+            bridgeUrl.searchParams.set('playUri', returnTo);
+            res.setHeader('Location', bridgeUrl.toString());
+        } else {
+            res.setHeader('Location', '/');
+        }
         res.end();
     } catch (err) {
         res.statusCode = 500;
