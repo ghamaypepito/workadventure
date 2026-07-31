@@ -561,10 +561,21 @@
                     (near the top of its card) - the exact bug Task 6 fixed, just relocated.
                     top-48 (192px) clears a toast's typical height so the two no longer occupy the
                     same vertical band in the common case.
+
+                    md:max-h-[calc(100dvh-240px)]: this wrapper also sets `bottom-0`, but with
+                    `top` and `h-fit` (a specified height) both present the box is over-constrained
+                    and `bottom` is ignored per spec, so on md+ it's really only bounded by this
+                    max-height. It was left at the old max-h-[calc(100dvh-100px)] (paired with the
+                    old top-12) when top-48 was introduced above, which - for a tall child like
+                    VisitCard (up to ~450px) on a shorter viewport (below ~640px tall) - let the
+                    wrapper's bottom edge extend past the viewport with an unscrollable tail.
+                    Reduced by the same +144px the top offset grew by (48px -> 192px), rounded to
+                    240px, to keep the same reserved margin at the very bottom of the viewport that
+                    the original top-12/max-h-100px pairing had.
                 -->
                 <div
                     transition:fly={{ x: 210, duration: 500 }}
-                    class="absolute bottom-0 w-full h-fit max-h-[calc(100dvh-100px)] md:top-48 md:right-0 md:w-fit flex flex-col gap-2 items-end justify-start p-0 m-0 mr-3 overflow-y-auto no-scroll-bar"
+                    class="absolute bottom-0 w-full h-fit max-h-[calc(100dvh-100px)] md:top-48 md:max-h-[calc(100dvh-240px)] md:right-0 md:w-fit flex flex-col gap-2 items-end justify-start p-0 m-0 mr-3 overflow-y-auto no-scroll-bar"
                 >
                     {#if $requestVisitCardsStore}
                         <VisitCard visitCardUrl={$requestVisitCardsStore} />
