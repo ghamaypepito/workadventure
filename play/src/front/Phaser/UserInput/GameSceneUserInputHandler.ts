@@ -17,6 +17,7 @@ import { isPopupJustClosed } from "../Game/Say/SayManager";
 import LL from "../../../i18n/i18n-svelte";
 import { followRoleStore, followStateStore, followUsersStore } from "../../Stores/FollowStore";
 import { localUserStore } from "../../Connection/LocalUserStore";
+import { wokaMenuStore } from "../../Stores/WokaMenuStore";
 import type { Shortcut } from "./UserInputManager";
 
 export class GameSceneUserInputHandler implements UserInputHandlerInterface {
@@ -133,6 +134,25 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                     return;
                 }
             }
+
+            // Cross-task review fix: WokaMenu.svelte relies on svelte-outside's tapOutside to close
+            // on an outside click, but that helper skips any event where event.defaultPrevented is
+            // true - and Phaser's MouseManager calls event.preventDefault() on every canvas mousedown
+            // by default (preventDefaultDown: true, never overridden in App.svelte). So a mousedown on
+            // blank map space never reaches tapOutside's detector at all, and the menu could never be
+            // closed that way. This is additive, not a replacement: tapOutside still handles clicks on
+            // other DOM chrome (chat panel, etc., which aren't canvas-target mousedowns).
+            //
+            // We piggyback on this same pointer-up pipeline instead - it's the same one that OPENS the
+            // menu (via the isActivatable branch above, through RemotePlayer.activate() ->
+            // toggleActionsMenu()) - so closing it here for a genuine "no activatable object hit" click
+            // is native to how the menu already works, and doesn't fight preventDefault or introduce a
+            // new race. It's also mutually exclusive with opening: a real woka click always hits an
+            // isActivatable object above and returns before reaching this line, so this can never close
+            // a menu that this very click just opened.
+            //
+            // wokaMenuStore.clear() just calls set(undefined) - a no-op when no menu is open.
+            wokaMenuStore.clear();
         }
 
         if ((!pointer.wasTouch && pointer.leftButtonReleased()) || pointer.getDuration() > 250) {

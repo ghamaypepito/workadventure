@@ -1,9 +1,31 @@
 <script lang="ts">
+    import { onDestroy, onMount } from "svelte";
     import { hoverPreviewStore } from "../../Stores/HoverPreviewStore";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { openDirectChatRoom } from "../../Chat/Utils";
     import { getColorHexOfStatus, getStatusLabel } from "../../Utils/AvailabilityStatus";
+    import { windowSize } from "../../Stores/CoWebsiteStore";
     import LL from "../../../i18n/i18n-svelte";
+
+    // Reserved chrome so the popup never renders under the persistent TopBar (h-12 = 48px, see
+    // TopBar.svelte - both it and the bottom ActionBar sit at z-[1000]) or the bottom ActionBar
+    // (rounded bar + p-1/1.5/2 padding + mb-2 margin, see ActionBar.svelte / ResponsiveActionBar.svelte).
+    // A little slack is added on top of each bar's own measured height as a margin of safety.
+    const TOP_CHROME_RESERVED_PX = 56;
+    const BOTTOM_CHROME_RESERVED_PX = 72;
+    const VIEWPORT_MARGIN_PX = 8;
+    // Fallback estimates used only for the very first paint, before the card's real size has been
+    // measured via bind:offsetWidth/offsetHeight below.
+    const CARD_WIDTH_ESTIMATE_PX = 180;
+    const CARD_HEIGHT_ESTIMATE_PX = 110;
+
+    let cardWidth = $state(0);
+    let cardHeight = $state(0);
+
+    // Set when the "Message" button is clicked but no chatID could be resolved for this player -
+    // shown inline instead of letting the button silently no-op (same failure-visibility fix
+    // already applied to the wave/ping toasts' quick-reply "failed" state).
+    let messageUnavailable = $state(false);
 
     function wave() {
         const data = $hoverPreviewStore;
@@ -19,18 +41,84 @@
             .getCurrentGameScene()
             .getRemotePlayersRepository()
             .getPlayerByUuid(data.userUuid)?.chatID;
-        if (chatID) {
-            openDirectChatRoom(chatID).catch((error) => console.error("Failed to open direct chat room:", error));
+        if (!chatID) {
+            // chatID is resolved lazily on click (not at render time), so it can genuinely be
+            // unavailable here. Don't close the popup and don't silently do nothing - keep it
+            // visible with a clear indication that nothing happened.
+            messageUnavailable = true;
+            return;
         }
+        openDirectChatRoom(chatID).catch((error) => console.error("Failed to open direct chat room:", error));
         hoverPreviewStore.set(undefined);
     }
+
+    // Fix (cross-task review): Phaser's per-object POINTER_OVER/POINTER_OUT hit-testing only
+    // fires while the cursor stays over the canvas. When the cursor leaves the canvas entirely
+    // (onto a DOM panel, browser chrome, etc.) Phaser's InputPlugin does not emit POINTER_OUT for
+    // whatever object the cursor was last over, so hoverPreviewStore was left populated
+    // indefinitely - and since this popup is pointer-events-auto, it kept swallowing clicks in
+    // that screen region. This single, global listener (attached once, for the app's lifetime -
+    // see MainLayout.svelte, which now mounts this component unconditionally) clears the store
+    // unconditionally whenever the cursor leaves the canvas, regardless of which player (if any)
+    // is currently shown.
+    function onCanvasMouseLeave() {
+        hoverPreviewStore.set(undefined);
+    }
+
+    let canvasEl: HTMLCanvasElement | undefined;
+
+    onMount(() => {
+        canvasEl = gameManager.getCurrentGameScene().game.canvas;
+        canvasEl.addEventListener("mouseleave", onCanvasMouseLeave);
+    });
+
+    onDestroy(() => {
+        canvasEl?.removeEventListener("mouseleave", onCanvasMouseLeave);
+    });
+
+    // Reset the inline failure state whenever a new hover preview is shown (e.g. moving from one
+    // player to another), so a stale "can't message" message doesn't linger for a different player.
+    $effect(() => {
+        const data = $hoverPreviewStore;
+        if (data) {
+            messageUnavailable = false;
+        }
+    });
+
+    // Viewport clamping: the card is positioned via translate(-50%, -100%) from a raw
+    // (screenX, screenY) anchor point (see RemotePlayer.ts's getScreenPosition()), so with no
+    // clamping it could render partly under the TopBar/ActionBar or half off-screen at the
+    // left/right edges. Uses the card's own measured size once available (falls back to a fixed
+    // estimate before first paint) and re-clamps on window resize via the windowSize store.
+    let clampedLeft = $derived.by(() => {
+        const data = $hoverPreviewStore;
+        const size = $windowSize;
+        if (!data) return 0;
+        const halfWidth = (cardWidth || CARD_WIDTH_ESTIMATE_PX) / 2;
+        const min = halfWidth + VIEWPORT_MARGIN_PX;
+        const max = Math.max(min, size.width - halfWidth - VIEWPORT_MARGIN_PX);
+        return Math.min(Math.max(data.screenX, min), max);
+    });
+
+    let clampedTop = $derived.by(() => {
+        const data = $hoverPreviewStore;
+        const size = $windowSize;
+        if (!data) return 0;
+        const height = cardHeight || CARD_HEIGHT_ESTIMATE_PX;
+        const rawTop = data.screenY - 16;
+        const min = TOP_CHROME_RESERVED_PX + height;
+        const max = Math.max(min, size.height - BOTTOM_CHROME_RESERVED_PX);
+        return Math.min(Math.max(rawTop, min), max);
+    });
 </script>
 
 {#if $hoverPreviewStore}
     {@const data = $hoverPreviewStore}
     <div
-        class="fixed z-[400] -translate-x-1/2 -translate-y-full bg-contrast/90 backdrop-blur rounded-lg p-2 pointer-events-auto flex flex-col gap-1 min-w-40"
-        style="left: {data.screenX}px; top: {data.screenY - 16}px"
+        bind:offsetWidth={cardWidth}
+        bind:offsetHeight={cardHeight}
+        class="fixed z-[1050] -translate-x-1/2 -translate-y-full bg-contrast/90 backdrop-blur rounded-lg p-2 pointer-events-auto flex flex-col gap-1 min-w-40"
+        style="left: {clampedLeft}px; top: {clampedTop}px"
         data-testid="person-hover-preview"
     >
         <div class="text-white text-sm font-bold flex items-center gap-1.5">
@@ -51,5 +139,8 @@
                 >{$LL.chat.userList.sendMessage()}</button
             >
         </div>
+        {#if messageUnavailable}
+            <div class="text-xxs opacity-70 text-center">Can't message - unavailable</div>
+        {/if}
     </div>
 {/if}

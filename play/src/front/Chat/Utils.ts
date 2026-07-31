@@ -103,6 +103,21 @@ export const openDirectChatRoom = async (chatID: string) => {
  * Sends a direct message to chatID without opening the chat panel - used for the wave/ping
  * toast's canned quick-reply, where popping the whole chat UI open would be more disruptive
  * than the one-line reply itself.
+ *
+ * KNOWN LIMITATION (documented, not fixed, by explicit decision for this fix round): the
+ * quick-reply's "failed" state only reliably catches the two failure modes this function itself
+ * can observe and throw for - "not connected" (above) and "room creation failed" (below). Once
+ * execution reaches `room.sendMessage(message)`, a genuine network/Matrix-level send failure will
+ * NOT surface as "failed" to the caller, and the quick-reply will show "sent" even though the
+ * message never actually went out.
+ *
+ * This is because MatrixChatRoom.sendMessage (Chat/Connection/Matrix/MatrixChatRoom.ts) is
+ * fire-and-forget by design: it kicks off `matrixRoom.client.sendMessage(...)` and swallows/logs
+ * any rejection internally (`.catch((error) => console.error(error))`) rather than returning a
+ * Promise the caller could await/catch. That method is shared with other existing callers (e.g.
+ * the real chat input box), so changing its signature to propagate send failures is out of scope
+ * here - it was a real option that was explicitly considered and declined for this batch, to
+ * avoid widening a shared interface. Fixing this fully would require that wider change.
  */
 export const sendDirectMessage = async (chatID: string, message: string): Promise<void> => {
     if (!get(userIsConnected)) {
