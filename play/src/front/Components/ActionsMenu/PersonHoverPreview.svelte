@@ -59,13 +59,31 @@
     // indefinitely - and since this popup is pointer-events-auto, it kept swallowing clicks in
     // that screen region. This single, global listener (attached once, for the app's lifetime -
     // see MainLayout.svelte, which now mounts this component unconditionally) clears the store
-    // unconditionally whenever the cursor leaves the canvas, regardless of which player (if any)
-    // is currently shown.
-    function onCanvasMouseLeave() {
+    // whenever the cursor leaves the canvas, regardless of which player (if any) is currently
+    // shown.
+    //
+    // Guard against this card itself: this card is a `fixed`, `pointer-events-auto` overlay that
+    // is NOT a descendant of the canvas element (it's rendered by Svelte into the app's own DOM
+    // tree, positioned on top via CSS). So moving the cursor from the canvas onto the card (e.g.
+    // to click Wave/Message) genuinely fires a canvas `mouseleave` with `relatedTarget` set to
+    // (or inside) the card. Without this guard, that would unmount the card out from under the
+    // cursor before any click on it could land, making Wave/Message unclickable via hover -
+    // exactly the failure mode this fix must not introduce. Only clear the store when the cursor
+    // did NOT land inside the card.
+    function onCanvasMouseLeave(event: MouseEvent) {
+        const related = event.relatedTarget;
+        if (related instanceof Node && cardEl?.contains(related)) {
+            return;
+        }
         hoverPreviewStore.set(undefined);
     }
 
     let canvasEl: HTMLCanvasElement | undefined;
+    // Bound to the card's root <div> below (alongside offsetWidth/offsetHeight) so
+    // onCanvasMouseLeave can check whether the cursor landed inside it. May be undefined at the
+    // moment mouseleave fires if the store was already cleared some other way (e.g. a click) -
+    // the `cardEl?.contains(...)` check above handles that safely.
+    let cardEl: HTMLDivElement | undefined;
 
     onMount(() => {
         canvasEl = gameManager.getCurrentGameScene().game.canvas;
@@ -115,6 +133,7 @@
 {#if $hoverPreviewStore}
     {@const data = $hoverPreviewStore}
     <div
+        bind:this={cardEl}
         bind:offsetWidth={cardWidth}
         bind:offsetHeight={cardHeight}
         class="fixed z-[1050] -translate-x-1/2 -translate-y-full bg-contrast/90 backdrop-blur rounded-lg p-2 pointer-events-auto flex flex-col gap-1 min-w-40"
