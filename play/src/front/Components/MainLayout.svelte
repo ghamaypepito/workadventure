@@ -13,6 +13,7 @@
     import { modalVisibilityStore, roomListVisibilityStore, showLimitRoomModalStore } from "../Stores/ModalStore";
     import { actionsMenuStore } from "../Stores/ActionsMenuStore";
     import { wokaMenuStore } from "../Stores/WokaMenuStore";
+    import { hoverPreviewStore } from "../Stores/HoverPreviewStore";
     import { showDesktopCapturerSourcePicker } from "../Stores/ScreenSharingStore";
     import { uiWebsitesStore } from "../Stores/UIWebsiteStore";
     import { coWebsites, windowSize } from "../Stores/CoWebsiteStore";
@@ -62,6 +63,7 @@
     import LimitRoomModal from "./Modal/LimitRoomModal.svelte";
     import ActionsMenu from "./ActionsMenu/ActionsMenu.svelte";
     import WokaMenu from "./ActionsMenu/WokaMenu.svelte";
+    import PersonHoverPreview from "./ActionsMenu/PersonHoverPreview.svelte";
     import Lazy from "./Lazy.svelte";
     import UiWebsiteContainer from "./UI/Website/UIWebsiteContainer.svelte";
     import Modal from "./Modal/Modal.svelte";
@@ -500,6 +502,10 @@
                         <ToastComponent {...toast.props} />
                     {/each}
                 </div>
+            {/if}
+
+            {#if $hoverPreviewStore}
+                <PersonHoverPreview />
             {/if}
 
             {#if $showRecordingList}
