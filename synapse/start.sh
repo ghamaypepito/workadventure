@@ -5,6 +5,13 @@ apt-get install -y gettext-base sudo wget
 set -e
 #set -x
 
+# The template lives in the image (baked in by the Dockerfile), but /data is a persistent
+# Railway volume that starts empty on first boot and otherwise survives across deploys (so the
+# generated signing key, media store, and homeserver.yaml aren't lost on every redeploy). Copy
+# the current image's template onto the volume on every boot so config changes from a new image
+# take effect, without touching anything else already on the volume.
+cp /homeserver.template.yaml /data/homeserver.template.yaml
+
 # Check if all variables used in the template is defined or not
 grep -o '\${[0-9A-Za-z_]*}' /data/homeserver.template.yaml | while read line
 do
