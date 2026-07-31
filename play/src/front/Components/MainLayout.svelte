@@ -493,7 +493,7 @@
             {/if}
 
             {#if $toastStore.size > 0}
-                <div class="absolute top-12 right-2 z-[999] flex flex-col gap-2 items-end">
+                <div class="absolute top-12 right-2 z-[1100] flex flex-col gap-2 items-end">
                     {#each [...$toastStore.entries()] as toastEntry (toastEntry[0])}
                         {@const toast = toastEntry[1]}
                         {@const ToastComponent = toast.component}
