@@ -5,6 +5,7 @@ FROM matrixdotorg/synapse:v1.140.0
 # this image, while /data itself (signing key, media store, homeserver.yaml, sqlite state if
 # ever used) survives across deploys via the Railway volume mounted there.
 COPY homeserver.template.yaml /homeserver.template.yaml
+COPY matrix.workadventure.localhost.log.config /matrix.workadventure.localhost.log.config
 COPY start.sh /start-custom.sh
 RUN chmod +x /start-custom.sh
 

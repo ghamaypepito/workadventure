@@ -11,6 +11,7 @@ set -e
 # the current image's template onto the volume on every boot so config changes from a new image
 # take effect, without touching anything else already on the volume.
 cp /homeserver.template.yaml /data/homeserver.template.yaml
+cp /matrix.workadventure.localhost.log.config /data/matrix.workadventure.localhost.log.config
 
 # Check if all variables used in the template is defined or not
 grep -o '\${[0-9A-Za-z_]*}' /data/homeserver.template.yaml | while read line
