@@ -9,8 +9,8 @@
 # For more information on how to configure Synapse, including a complete accounting of
 # each option, go to docs/usage/configuration/config_documentation.md or
 # https://matrix-org.github.io/synapse/latest/usage/configuration/config_documentation.html
-server_name: "matrix.workadventure.localhost"
-public_baseurl: http://matrix.workadventure.localhost/
+server_name: "connectiumai.com"
+public_baseurl: https://matrix.connectiumai.com/
 pid_file: /data/homeserver.pid
 listeners:
   - port: 8008
@@ -21,84 +21,66 @@ listeners:
       - names: [ client, federation ]
         compress: false
 database:
-  name: sqlite3
+  name: psycopg2
   args:
-    database: /data/homeserver.db
+    user: "${PGUSER}"
+    password: "${PGPASSWORD}"
+    database: "${PGDATABASE}"
+    host: "${PGHOST}"
+    port: "${PGPORT}"
+    cp_min: 5
+    cp_max: 10
 log_config: "/data/matrix.workadventure.localhost.log.config"
 media_store_path: /data/media_store
-report_stats: true
-registration_shared_secret: "XJx!`J-;J4Kx!'p>J%[C!G$u8=YP6_4eEV$~Je9#~c>9sPGcDz"
-macaroon_secret_key: "E@=9DoVJg.t:.k:p8uI9*hMOQl~^JF8,rs2ak-evN5eS*pv.jF"
-form_secret: "Xa6T^,-_Ib2,^#Py=;AQ*lI:ex_QCAZQXG#P&RoTxT~2qBFIA:"
+report_stats: false
+registration_shared_secret: "${REGISTRATION_SHARED_SECRET}"
+macaroon_secret_key: "${MACAROON_SECRET_KEY}"
+form_secret: "${FORM_SECRET}"
 signing_key_path: "/data/matrix.workadventure.localhost.signing.key"
 trusted_key_servers:
   - server_name: "matrix.org"
 suppress_key_server_warning: true
 
-jwt_config:
-  enabled: true
-  secret: "${JWT_SECRET}"
-  algorithm: "HS256"
-  subject_claim: "matrixUserId"
-
 oidc_providers:
-  - idp_id: oidc-server-mock
-    idp_name: OIDC Server Mock
-    issuer: "http://oidc.workadventure.localhost"
-    skip_verification: true
-    client_id: "authorization-code-client-id"
-    client_secret: "authorization-code-client-secret"
+  - idp_id: google
+    idp_name: Google
+    issuer: "https://accounts.google.com"
+    client_id: "${GOOGLE_OIDC_CLIENT_ID}"
+    client_secret: "${GOOGLE_OIDC_CLIENT_SECRET}"
     scopes: [ "openid", "email", "profile" ]
-
     user_profile_method: "userinfo_endpoint"
     user_mapping_provider:
       config:
         localpart_template: "{{ user.email.split('@')[0] }}"
-        #localpart_template: "{{ user.preferred_username }}"
         display_name_template: "{{ user.name }}"
         email_template: "{{ user.email }}"
-#  - idp_id: workadventure-admin
-#    idp_name: WorkAdventure Admin
-#    issuer: "http://member.workadventure.localhost"
-#    skip_verification: true
-#    client_id: "4"
-#    client_secret: "SZL6NhyAyB60kHoB4iwoG0zH6cuItlqFVgHqEIJE"
-#    scopes: ["openid", "email", "profile"]
-#
-#    user_profile_method: "userinfo_endpoint"
-#    user_mapping_provider:
-#      config:
-#        localpart_template: "{{ user.email.split('@')[0] }}"
-#        #localpart_template: "{{ user.preferred_username }}"
-#        display_name_template: "{{ user.name }}"
-#        email_template: "{{ user.email }}"
+  - idp_id: microsoft
+    idp_name: Microsoft
+    issuer: "https://login.microsoftonline.com/${MICROSOFT_TENANT_ID}/v2.0"
+    client_id: "${MICROSOFT_OIDC_CLIENT_ID}"
+    client_secret: "${MICROSOFT_OIDC_CLIENT_SECRET}"
+    scopes: [ "openid", "email", "profile" ]
+    user_profile_method: "userinfo_endpoint"
+    user_mapping_provider:
+      config:
+        localpart_template: "{{ user.email.split('@')[0] }}"
+        display_name_template: "{{ user.name }}"
+        email_template: "{{ user.email }}"
 
 sso:
   client_whitelist:
-    - http://pusher.workadventure.localhost/
-    - http://play.workadventure.localhost/
+    - "${PXLCODE_PLAY_URL}"
+    - "${VINGS_PLAY_URL}"
 
-
-enable_registration: true
-enable_registration_without_verification: true
-turn_allow_guests: true
-allow_guest_access: true
+enable_registration: false
+allow_guest_access: false
+turn_allow_guests: false
 enable_authenticated_media: false
 
-# Development server only: we allow creating publicly visible rooms to anyone.
-room_list_publication_rules:
-  - "action": "allow"
-
-auto_join_rooms:
-  - "#exampleroom:example.com"
-  - "#anotherexampleroom:example.com"
-
-autocreate_auto_join_rooms: true
-# vim:ft=yaml
+autocreate_auto_join_rooms: false
 
 user_directory:
   search_all_users: true
-
 
 rc_login:
   address:
