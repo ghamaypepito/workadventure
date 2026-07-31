@@ -9,10 +9,19 @@ module.exports = (req, res) => {
         return;
     }
 
+    const url = new URL(req.url, baseUrl(req));
     const state = crypto.randomBytes(16).toString('hex');
     const redirectUri = `${baseUrl(req)}/api/auth/google-callback`;
+    // The room URL the user was on when they clicked "Sign in with Google" (set dynamically by
+    // the SSO gate script, since this is a static build-time link otherwise) - stashed in a
+    // cookie so google-callback.js can hand it off to Matrix login as the playUri to return to.
+    const returnTo = url.searchParams.get('returnTo');
 
-    res.setHeader('Set-Cookie', `oauth_state=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
+    const cookies = [`oauth_state=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`];
+    if (returnTo) {
+        cookies.push(`return_to=${encodeURIComponent(returnTo)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
+    }
+    res.setHeader('Set-Cookie', cookies);
 
     const params = new URLSearchParams({
         client_id: clientId,

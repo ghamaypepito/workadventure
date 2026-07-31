@@ -9,11 +9,18 @@ module.exports = (req, res) => {
         return;
     }
 
+    const url = new URL(req.url, baseUrl(req));
     const state = crypto.randomBytes(16).toString('hex');
     const redirectUri = `${baseUrl(req)}/api/auth/microsoft-callback`;
     const tenant = process.env.MICROSOFT_TENANT_ID || 'common';
+    // See google.js for why this is captured - handed to google-callback.js's Microsoft twin.
+    const returnTo = url.searchParams.get('returnTo');
 
-    res.setHeader('Set-Cookie', `oauth_state=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
+    const cookies = [`oauth_state=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`];
+    if (returnTo) {
+        cookies.push(`return_to=${encodeURIComponent(returnTo)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
+    }
+    res.setHeader('Set-Cookie', cookies);
 
     const params = new URLSearchParams({
         client_id: clientId,

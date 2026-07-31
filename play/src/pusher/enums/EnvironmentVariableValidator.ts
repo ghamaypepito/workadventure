@@ -473,6 +473,13 @@ export const EnvironmentVariables = z.object({
     MATRIX_ADMIN_USER: z.string().optional().describe("Matrix administrator username"),
     MATRIX_ADMIN_PASSWORD: z.string().optional().describe("Matrix administrator password"),
     MATRIX_DOMAIN: z.string().optional().describe("Matrix server domain"),
+    MATRIX_BRIDGE_SECRET: z
+        .string()
+        .optional()
+        .describe(
+            "Shared HMAC secret used to verify short-lived tokens from the custom SSO gate's " +
+                "callback functions, so /custom-sso-matrix-login can't be called with an arbitrary email",
+        ),
     EMBEDLY_KEY: z.string().optional().describe("Embedly API key for rich link previews"),
     GRPC_MAX_MESSAGE_SIZE: PositiveIntAsString.optional()
         .or(z.string().max(0))
