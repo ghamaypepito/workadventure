@@ -22,6 +22,11 @@ listeners:
         compress: false
 database:
   name: psycopg2
+  # Railway's default Postgres template uses the en_US.utf8 locale, not the C locale Synapse's
+  # own docs recommend (docs/postgres.md) - this explicitly opts into that, matching Synapse's
+  # supported override for it. Low-risk here since Matrix IDs/room IDs this deployment cares
+  # about are ASCII, not relying on locale-dependent collation for anything sensitive.
+  allow_unsafe_locale: true
   args:
     user: "${PGUSER}"
     password: "${PGPASSWORD}"
