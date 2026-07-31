@@ -2,6 +2,7 @@
     import type { Unsubscriber } from "svelte/store";
     import type { AvailabilityStatus } from "@workadventure/messages";
     import { onDestroy, onMount } from "svelte";
+    import { tapOutside } from "svelte-outside";
     import { wokaMenuStore, wokaMenuProgressStore } from "../../Stores/WokaMenuStore";
     import ButtonClose from "../Input/ButtonClose.svelte";
     import VisitCard from "../VisitCard/VisitCard.svelte";
@@ -86,6 +87,7 @@
     <div
         class="m-auto my-0 h-fit min-h-fit max-w-lg min-w-48 max-sm:max-w-[89%] z-50 bg-contrast/80 transition-all backdrop-blur rounded-lg pointer-events-auto overflow-hidden md:mr-0"
         data-testid="actions-menu"
+        use:tapOutside={closeActionsMenu}
     >
         <div>
             <div class="w-full bg-cover relative">
