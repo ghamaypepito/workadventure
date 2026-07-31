@@ -2,6 +2,7 @@
     import { onDestroy } from "svelte";
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import { availabilityStatusStore, inBbbStore, inJitsiStore, inLivekitStore } from "../../../Stores/MediaStore";
+    import { customStatusMessageStore } from "../../../Stores/CustomStatusMessageStore";
     import { openedMenuStore } from "../../../Stores/MenuStore";
     import { isInRemoteConversation } from "../../../Stores/StreamableCollectionStore";
     import { getColorHexOfStatus, getStatusLabel } from "../../../Utils/AvailabilityStatus";
@@ -111,7 +112,9 @@
                         class="hidden @xl/actions:block"
                         style="color: {getColorHexOfStatus($availabilityStatusStore)};filter: brightness(200%);"
                     >
-                        {getStatusLabel($availabilityStatusStore)}
+                        {getStatusLabel($availabilityStatusStore)}{$customStatusMessageStore
+                            ? ` · ${$customStatusMessageStore}`
+                            : ""}
                     </div>
                 </div>
             </div>

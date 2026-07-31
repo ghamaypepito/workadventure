@@ -4,6 +4,7 @@
     import { setContext } from "svelte";
     import type { Readable } from "svelte/store";
     import { derived, get } from "svelte/store";
+    import { customStatusMessageStore } from "../../../Stores/CustomStatusMessageStore";
     import { analyticsClient } from "../../../Administration/AnalyticsClient";
     import { connectionManager } from "../../../Connection/ConnectionManager";
     import { ENABLE_OPENID, SENTRY_DSN_FRONT } from "../../../Enum/EnvironmentVariable";
@@ -164,6 +165,20 @@
     <div class="p-0 m-0 list-none overflow-y-auto max-h-[calc(100vh-96px)]">
         <ExternalComponents zone="menuTop" />
         <AvailabilityStatusList statusInformation={getStatusInformation(statusToShow)} />
+        <div class="px-3 py-2">
+            <label for="custom-status-input" class="text-xxs uppercase opacity-60 block mb-1">
+                Custom status
+            </label>
+            <input
+                id="custom-status-input"
+                type="text"
+                maxlength="40"
+                placeholder="e.g. In a client call"
+                class="w-full bg-white/10 rounded px-2 py-1 text-sm text-white placeholder:text-white/40 outline-none focus:bg-white/20"
+                value={$customStatusMessageStore}
+                oninput={(e) => customStatusMessageStore.set((e.target as HTMLInputElement).value)}
+            />
+        </div>
         <HeaderMenuItem label={$LL.menu.sub.profile()} />
         {#if showWokaNameMenuItem()}
             <ActionBarButton
