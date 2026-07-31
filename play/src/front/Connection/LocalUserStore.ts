@@ -58,6 +58,7 @@ const notAskAgainHelpWebRtcSettingsPopup = "notAskAgainHelpWebRtcSettingsPopup";
 const duplicateUserDontRemindKey = "workadventure_duplicate_user_dont_remind";
 const recordingsViewMode = "wa-recordings-view-mode";
 export const languageKey = "language";
+const customStatusMessageKey = "customStatusMessage";
 const videoQualityKey = "videoQuality";
 const screenShareQualityKey = "screenShareQuality";
 const bandwidthConstrainedScreenSharePreferenceKey = "bandwidthConstrainedScreenSharePreference";
@@ -158,6 +159,14 @@ class LocalUserStore {
         }
         const value = localStorage.getItem(playerNameKey) || "";
         return isUserNameValid(value) ? value : null;
+    }
+
+    setCustomStatusMessage(message: string): void {
+        localStorage.setItem(customStatusMessageKey, message);
+    }
+
+    getCustomStatusMessage(): string {
+        return localStorage.getItem(customStatusMessageKey) || "";
     }
 
     setPlayerCharacterIndex(playerCharacterIndex: number): void {
