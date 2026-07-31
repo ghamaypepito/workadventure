@@ -3,12 +3,14 @@
     import { fly } from "svelte/transition";
     import { onDestroy, onMount } from "svelte";
     import { toastStore } from "../../Stores/ToastStoreSingleton";
+    import { formatRelativeTime } from "../../Utils/RelativeTime";
 
     interface Props {
         extraClasses: string;
         duration?: number;
         toastUuid?: string;
-        theme: "success" | "error" | "secondary";
+        theme: "success" | "error" | "secondary" | "light";
+        receivedAt?: number;
         children?: Snippet;
         buttons?: Snippet;
     }
@@ -18,11 +20,24 @@
         duration = undefined,
         toastUuid = undefined,
         theme = "success",
+        receivedAt = undefined,
         children,
         buttons,
     }: Props = $props();
 
     let timeout: ReturnType<typeof setTimeout>;
+
+    // Live-updating "Just now" / "2m ago" label. Only runs while receivedAt is set, so toasts
+    // that don't pass it (every existing toast) pay no cost.
+    let relativeTimeLabel: string | undefined = $state(undefined);
+    let relativeTimeTimer: ReturnType<typeof setInterval> | undefined;
+
+    if (receivedAt !== undefined) {
+        relativeTimeLabel = formatRelativeTime(receivedAt, Date.now());
+        relativeTimeTimer = setInterval(() => {
+            relativeTimeLabel = formatRelativeTime(receivedAt, Date.now());
+        }, 15_000);
+    }
 
     onMount(() => {
         if (duration !== undefined && toastUuid === undefined) {
@@ -39,6 +54,9 @@
 
     onDestroy(() => {
         clearTimeout(timeout);
+        if (relativeTimeTimer) {
+            clearInterval(relativeTimeTimer);
+        }
     });
 </script>
 
@@ -48,9 +66,10 @@
         class:bg-danger={theme === "error"}
         class:bg-success={theme === "success"}
         class:bg-secondary={theme === "secondary"}
+        class:bg-slate-300={theme === "light"}
     ></div>
     <div
-        class="bg-contrast/50 flex flex-col backdrop-blur-md text-white min-w-60 min-h-12 rounded-lg overflow-hidden transition-all responsive z-20 {extraClasses}"
+        class="flex flex-col backdrop-blur-md min-w-60 min-h-12 rounded-lg overflow-hidden transition-all responsive z-20 {extraClasses} {theme !== 'light' ? 'bg-contrast/50 text-white' : 'bg-white/95 text-slate-900'}"
         transition:fly={{ x: 900, duration: 500 }}
     >
         <!-- Progress bar -->
@@ -69,6 +88,9 @@
         <div class="flex items-center p-4 pointer-events-auto justify-center grow">
             <div class="text-center leading-6 responsive-message">
                 {@render children?.()}
+                {#if relativeTimeLabel}
+                    <div class="text-xs opacity-60 mt-1">{relativeTimeLabel}</div>
+                {/if}
             </div>
         </div>
         {#if buttons}
