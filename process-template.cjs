@@ -199,6 +199,35 @@ const ssoGateScript = `<script>
 </script>`;
 html = html.replace('</head>', ssoGateScript + '</head>');
 
+// Session supersession poll: while signed in (wa_user cookie present), periodically check
+// whether this session is still the active one for its email. /api/auth/session-status
+// already clears the wa_session/wa_user cookies server-side the moment it detects another
+// device has signed in with the same email - this just notices that and reloads so the
+// SSO gate reappears, instead of leaving a silently-logged-out session sitting in the game.
+const sessionPollScript = `<script>
+(function () {
+  function getCookie(name) {
+    const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  function pollSessionStatus() {
+    if (!getCookie('wa_user')) return;
+    fetch('/api/auth/session-status', { credentials: 'same-origin' })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (!data.authenticated) {
+          window.location.reload();
+        }
+      })
+      .catch(function () {});
+  }
+
+  setInterval(pollSessionStatus, 30000);
+})();
+</script>`;
+html = html.replace('</head>', sessionPollScript + '</head>');
+
 fs.writeFileSync(indexPath, html);
 console.log('index.html template variables substituted successfully.');
 console.log('PUSHER_URL set to:', PUSHER_URL);
