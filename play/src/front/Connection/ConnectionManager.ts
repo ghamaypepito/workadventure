@@ -660,7 +660,15 @@ class ConnectionManager {
         }
 
         //user connected, set connected store for menu at true
-        if (localUserStore.isLogged()) {
+        // isLogged() checks for a real OpenID access token claim, which this deployment's custom
+        // Matrix bridge JWT deliberately never sets (setting one would route /me's pusher handler
+        // into openIDClient.checkTokenAuth against a real OIDC provider, which we don't have).
+        // A present matrixUserId means this user did complete that bridge login for real, so also
+        // treat that as "connected" here - this gate is what allows gameManager.getChatConnection()
+        // to ever attempt a Matrix login at all; leave isLogged() itself untouched since it also
+        // gates unrelated features (recording, map editor, save name/textures) that should keep
+        // requiring a genuine admin-verified account.
+        if (localUserStore.isLogged() || matrixUserId) {
             userIsConnected.set(true);
         }
 
