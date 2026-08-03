@@ -27,6 +27,11 @@ import { BaseHttpController } from "./BaseHttpController";
 
 const debug = Debug("pusher:requests");
 
+// Frontend origins allowed to receive a Matrix bridge login redirect (see customSsoMatrixLogin
+// below). This deployment's frontend is Vercel-hosted separately from this pusher service, one
+// vercel.app URL plus (on this branch) one custom domain aliasing the same Vercel project.
+const MATRIX_BRIDGE_ALLOWED_PLAY_HOSTNAMES = ["vings-workplace.vercel.app", "office.connectiumai.com"];
+
 export class AuthenticateController extends BaseHttpController {
     private readonly redirectToMatrixFile: string;
     private readonly redirectToPlayFile: string;
@@ -493,10 +498,20 @@ export class AuthenticateController extends BaseHttpController {
                 return;
             }
 
-            // Same open-redirect protection /login-screen already applies to its own playUri.
-            const verifyDomainService_ = VerifyDomainService.get(await adminService.getCapabilities());
-            const verifyDomainResult = await verifyDomainService_.verifyDomain(query.playUri);
-            if (!verifyDomainResult) {
+            // Open-redirect protection for playUri. Unlike /login-screen's own playUri check
+            // (VerifyDomainService, which compares against the pusher's own hostname - correct
+            // for a stock deployment where the pusher also serves the frontend), this deployment's
+            // frontend is a separate Vercel-hosted origin, so that comparison would always fail
+            // here. Check against this deployment's known frontend origins instead.
+            let playUriHostname: string;
+            try {
+                playUriHostname = new URL(query.playUri).hostname;
+            } catch {
+                res.status(403);
+                res.send("Unauthorized domain in playUri");
+                return;
+            }
+            if (!MATRIX_BRIDGE_ALLOWED_PLAY_HOSTNAMES.includes(playUriHostname)) {
                 res.status(403);
                 res.send("Unauthorized domain in playUri");
                 return;
