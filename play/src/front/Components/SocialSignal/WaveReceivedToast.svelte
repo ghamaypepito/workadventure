@@ -31,6 +31,16 @@
     function waveBack() {
         const scene = gameManager.getCurrentGameScene();
         scene.inviteManager?.requestSocialSignal("wave", senderUserUuid, actorName, senderUserId);
+        // Best-effort: also drop a line in the real chat conversation so the wave shows up there
+        // alongside any actual messages, not just as a proximity-area social signal. Silently
+        // skipped if chatID isn't resolvable yet - the wave itself (above) already succeeded and
+        // shouldn't be blocked or reported as failed on account of this being unavailable.
+        const chatID = resolveChatID();
+        if (chatID) {
+            sendDirectMessage(chatID, "👋 Waved back").catch((error) =>
+                console.error("Failed to log wave-back in chat:", error),
+            );
+        }
         toastStore.removeToast(toastUuid);
     }
 
