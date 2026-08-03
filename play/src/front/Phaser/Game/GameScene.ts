@@ -54,7 +54,6 @@ import {
     ENABLE_CHAT_DISCONNECTED_LIST,
     ENABLE_MAP_EDITOR,
     ENABLE_OPENID,
-    MATRIX_DOMAIN,
     MAX_PER_GROUP,
     POSITION_DELAY,
     PUBLIC_MAP_STORAGE_PREFIX,
@@ -1023,28 +1022,32 @@ export class GameScene extends DirtyScene {
                 errorScreenStore.setException(e);
             });
 
-        // Broadcast our chat ID to other players as soon as we know our own email, rather than
-        // waiting on gameManager.getChatConnection() to fully resolve (real matrix-js-sdk client
-        // creation, crypto store setup, sync). That chain has its own independent failure modes
-        // (e.g. a transient Matrix login/sync error) which used to silently prevent peers from
-        // ever seeing our chat ID at all, showing "Can't message - unavailable" even though we
-        // could otherwise be reached. The ID itself is deterministic from the email (mirrors
-        // MatrixProvider.getMatrixIdFromEmail on the pusher) and matches what a successful matrix
-        // login exchanges for anyway, so peers can address us correctly without waiting on that
-        // exchange to happen on our side first.
-        (async () => {
-            const connection = this.connection;
-            const email: string | null = localUserStore.getLocalUser()?.email || null;
-            if (email && MATRIX_DOMAIN && connection) {
-                const chatId = `@${email.replace("@", "_")}:${MATRIX_DOMAIN}`;
-                await this.roomJoinedPromiseDeferred.promise;
-                connection.emitUpdateChatId(email, chatId);
-                connection.emitPlayerChatID(chatId);
-            }
-        })().catch((e) => {
-            console.error(e);
-            Sentry.captureException(e);
-        });
+        // Broadcast our chat ID to other players once we have a real Matrix login. This
+        // deployment never runs WorkAdventure's own OpenID/admin-backed login flow (ENABLE_OPENID
+        // is off, no admin backend), so every game session - including ones that went through the
+        // custom SSO gate + Matrix bridge - connects via the plain anonymous /anonymLogin, which
+        // never attaches an email to LocalUser. Gating this broadcast on `email` (as the original
+        // code did) meant it could never fire for anyone on this deployment, regardless of Matrix
+        // login success - "Can't message - unavailable" for every player, always. The chat ID
+        // itself becomes available in local storage as soon as gameManager.getChatConnection()
+        // resolves (MatrixClientWrapper.retrieveMatrixConnectionDataFromLoginToken sets it before
+        // returning), so gate on that directly instead.
+        gameManager
+            .getChatConnection()
+            .then(async () => {
+                const connection = this.connection;
+                const chatId = localUserStore.getChatId();
+                if (chatId && connection) {
+                    await this.roomJoinedPromiseDeferred.promise;
+                    const email = localUserStore.getLocalUser()?.email ?? "";
+                    connection.emitUpdateChatId(email, chatId);
+                    connection.emitPlayerChatID(chatId);
+                }
+            })
+            .catch((e) => {
+                console.error(e);
+                Sentry.captureException(e);
+            });
 
         if (this.game.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) {
             this._focusFx = new DarkenOutsideAreaEffect(this, this.cameras.main, {
