@@ -32,6 +32,11 @@
     // fix as messageUnavailable, so hitting the limit here looks the same as it does anywhere
     // else the limit can block a wave, instead of the button silently doing nothing.
     let waveBlocked = $state(false);
+    // Set when requestMeetingInvitation returns false (antispam limit: max 3 invites to the same
+    // person per 10 minutes) - previously this closed the popup with zero indication anything went
+    // wrong, which is exactly what made "Join my desk" look like it "sometimes just doesn't work"
+    // when clicked repeatedly on the same person while testing.
+    let joinDeskBlocked = $state(false);
 
     function wave() {
         const data = $hoverPreviewStore;
@@ -84,13 +89,15 @@
         if (!data) return;
         const scene = gameManager.getCurrentGameScene();
         const sent = scene.inviteManager?.requestMeetingInvitation(data.userUuid, data.userId);
-        if (sent) {
-            try {
-                scene.playMeetingInviteSound();
-            } catch (error) {
-                console.error("Failed to play sound: ", error);
-                Sentry.captureException(error);
-            }
+        if (sent === false) {
+            joinDeskBlocked = true;
+            return;
+        }
+        try {
+            scene.playMeetingInviteSound();
+        } catch (error) {
+            console.error("Failed to play sound: ", error);
+            Sentry.captureException(error);
         }
         hoverPreviewStore.set(undefined);
     }
@@ -144,6 +151,7 @@
         if (data) {
             messageUnavailable = false;
             waveBlocked = false;
+            joinDeskBlocked = false;
         }
     });
 
@@ -216,6 +224,9 @@
         {/if}
         {#if waveBlocked}
             <div class="text-xxs opacity-70 text-center">Too many waves - try again later</div>
+        {/if}
+        {#if joinDeskBlocked}
+            <div class="text-xxs opacity-70 text-center">Too many invites to this person - try again later</div>
         {/if}
     </div>
 {/if}

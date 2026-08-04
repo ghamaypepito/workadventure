@@ -1,3 +1,4 @@
+import Phaser from "phaser";
 import type { LocatePositionMessage as LocatePositionMessageProto } from "@workadventure/messages";
 import { get } from "svelte/store";
 import type { RoomConnection } from "../../Connection/RoomConnection";
@@ -7,6 +8,10 @@ import LL from "../../../i18n/i18n-svelte";
 import { localUserStore } from "../../Connection/LocalUserStore";
 import type { CameraManager } from "./CameraManager";
 import type { GameScene } from "./GameScene";
+
+const LOCATE_LINE_COLOR = 0xffd700;
+const LOCATE_LINE_ALPHA = 0.8;
+const LOCATE_LINE_WIDTH = 3;
 
 /**
  * LocateManager handles the locate position feature, managing camera positioning,
@@ -18,6 +23,12 @@ export class LocateManager {
     private locatePositionTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
     private locatePositionClearProgressTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
     private wokaMenuStoreUnsubscriber?: () => void;
+    // Visual line from the local player to wherever they're locating, so there's a clear on-screen
+    // indication of direction while the camera is jumping around/searching for the target - not
+    // just the "scanning..." progress text with no visual reference point.
+    private lineGraphics: Phaser.GameObjects.Graphics | undefined;
+    private lineTargetPosition: { x: number; y: number } | undefined;
+    private lineUpdateHandler: (() => void) | undefined;
 
     constructor(
         private scene: GameScene,
@@ -31,6 +42,7 @@ export class LocateManager {
 
     public destroy(): void {
         this.clearAllTimeouts();
+        this.stopLocateLine();
         this.wokaMenuStoreUnsubscriber?.();
         wokaMenuProgressStore.set(undefined);
     }
@@ -49,6 +61,7 @@ export class LocateManager {
         this.wokaMenuStoreUnsubscriber = wokaMenuStore.subscribe((value) => {
             if (value === undefined && previouslyFollowedRemotePlayer !== undefined) {
                 this.cameraManager.stopFollowRemotePlayer();
+                this.stopLocateLine();
                 previouslyFollowedRemotePlayer = undefined;
             } else if (
                 value !== undefined &&
@@ -74,6 +87,7 @@ export class LocateManager {
 
         // Clear any existing locate position intervals/timeouts
         this.clearAllTimeouts();
+        this.stopLocateLine();
 
         // Set camera to exploration mode and center on the position
         this.cameraManager.setExplorationMode();
@@ -82,6 +96,7 @@ export class LocateManager {
             y: message.position.y,
         });
         this.cameraManager.setFollowMode();
+        this.startLocateLine({ x: message.position.x, y: message.position.y });
         // Get user data to initialize woka menu
         const userData = this.scene.getRemotePlayersRepository().getPlayers().get(message.userId);
         const userName = userData?.name ?? get(LL).locate.userSearching();
@@ -151,6 +166,7 @@ export class LocateManager {
                         this.activateRemoteUser(remoteUser);
                     } else {
                         wokaMenuStore.clear();
+                        this.stopLocateLine();
                     }
                     this.locatePositionClearProgressTimeout = undefined;
                 }, 3000);
@@ -171,7 +187,50 @@ export class LocateManager {
         setTimeout(() => {
             remoteUser.activate();
             wokaMenuProgressStore.set(undefined);
+            this.stopLocateLine();
         }, 300);
+    }
+
+    /** Starts drawing a line from the local player to `targetPosition`, updated every frame so it
+     * tracks the local player as they move (or the target's position, if it changes while
+     * searching). Drawn in world space (not fixed to the camera/UI), so it scrolls naturally with
+     * the map and is visible for as much of its length as is currently on-screen. */
+    private startLocateLine(targetPosition: { x: number; y: number }): void {
+        this.lineTargetPosition = targetPosition;
+        if (!this.lineGraphics) {
+            this.lineGraphics = this.scene.add.graphics();
+            this.lineGraphics.setDepth(1_000_000);
+        }
+        if (!this.lineUpdateHandler) {
+            this.lineUpdateHandler = () => this.redrawLocateLine();
+            this.scene.events.on(Phaser.Scenes.Events.UPDATE, this.lineUpdateHandler);
+        }
+        this.redrawLocateLine();
+    }
+
+    private redrawLocateLine(): void {
+        if (!this.lineGraphics || !this.lineTargetPosition) {
+            return;
+        }
+        this.lineGraphics.clear();
+        this.lineGraphics.lineStyle(LOCATE_LINE_WIDTH, LOCATE_LINE_COLOR, LOCATE_LINE_ALPHA);
+        this.lineGraphics.lineBetween(
+            this.scene.CurrentPlayer.x,
+            this.scene.CurrentPlayer.y,
+            this.lineTargetPosition.x,
+            this.lineTargetPosition.y,
+        );
+    }
+
+    private stopLocateLine(): void {
+        if (this.lineUpdateHandler) {
+            this.scene.events.off(Phaser.Scenes.Events.UPDATE, this.lineUpdateHandler);
+            this.lineUpdateHandler = undefined;
+        }
+        this.lineGraphics?.clear();
+        this.lineGraphics?.destroy();
+        this.lineGraphics = undefined;
+        this.lineTargetPosition = undefined;
     }
 
     private clearAllTimeouts(): void {
