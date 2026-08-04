@@ -1912,6 +1912,21 @@ export class MatrixChatRoom
             );
     }
 
+    /**
+     * Same member ids as {@link getMembersForRoomTypeHeuristics}, but public - for
+     * duplicate-direct-room detection (MatrixChatConnection's getDirectRoomFor /
+     * dedupeDirectRoomsFor), which needs this for EVERY room in the room list, not just the one
+     * currently open. The `members` store is intentionally not used for this: it stays empty
+     * until ensureMembersInitialized() has run for that specific room, which normally only
+     * happens once a user actually opens it in the UI - so a duplicate room the user hasn't
+     * clicked into yet would be invisible to a check based on that store, defeating the point of
+     * the check. Reading straight from the underlying SDK room's local state is synchronous and
+     * needs no such initialization.
+     */
+    public getMemberIdsSync(): string[] {
+        return this.getMembersForRoomTypeHeuristics().map((member) => member.userId);
+    }
+
     private getMatrixRoomType(): "direct" | "multiple" {
         if (this.hasMatrixSpaceParent()) {
             return "multiple";
