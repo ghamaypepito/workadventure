@@ -1,4 +1,4 @@
-import Phaser from "phaser";
+import * as Phaser from "phaser";
 import type { LocatePositionMessage as LocatePositionMessageProto } from "@workadventure/messages";
 import { get } from "svelte/store";
 import type { RoomConnection } from "../../Connection/RoomConnection";
