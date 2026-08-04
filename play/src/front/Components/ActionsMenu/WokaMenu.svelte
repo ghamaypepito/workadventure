@@ -34,7 +34,10 @@
         currentScerne.CurrentPlayer.emitAskPosition();
     }
 
-    let buttonsLayout: "row" | "column" | "wrap" = $state("row");
+    // Grid, not row/wrap: a flex row just kept growing wider to fit every action on one line,
+    // which is what made this popup so wide. 2 columns for a handful of actions, 3 once there are
+    // enough to make 2 columns feel cramped/tall.
+    let gridColumns: 2 | 3 = $state(2);
 
     wokaMenuStoreUnsubscriber = wokaMenuStore.subscribe((value) => {
         wokaMenuData = value;
@@ -57,11 +60,7 @@
                 }
             });
             const nbButtons = sortedActions.length + (wokaMenuData.wokaName ? 0 : 1) + (remotePlayer?.chatID ? 1 : 0);
-            if (nbButtons < 4) {
-                buttonsLayout = "row";
-            } else {
-                buttonsLayout = "wrap";
-            }
+            gridColumns = nbButtons > 4 ? 3 : 2;
         }
     });
 
@@ -85,7 +84,7 @@
 
 {#if wokaMenuData}
     <div
-        class="m-auto my-0 h-fit min-h-fit max-w-lg min-w-48 max-sm:max-w-[89%] z-50 bg-contrast/80 transition-all backdrop-blur rounded-lg pointer-events-auto overflow-hidden md:mr-0"
+        class="m-auto my-0 h-fit min-h-fit w-64 max-sm:max-w-[89%] z-50 bg-contrast/80 transition-all backdrop-blur rounded-lg pointer-events-auto overflow-hidden md:mr-0"
         data-testid="actions-menu"
         use:tapOutside={closeActionsMenu}
     >
@@ -159,18 +158,16 @@
 
         {#if sortedActions}
             <div
-                class="flex items-center bg-contrast w-full justify-center"
+                class="grid gap-1.5 p-2 bg-contrast w-full"
                 class:margin-close={!wokaMenuData.wokaName}
-                class:flex-row={buttonsLayout === "row"}
-                class:flex-wrap={buttonsLayout === "wrap"}
+                class:grid-cols-2={gridColumns === 2}
+                class:grid-cols-3={gridColumns === 3}
             >
                 {#each sortedActions ?? [] as action (action.uuid)}
                     <button
                         type="button"
                         data-testid={action.testId}
-                        class="btn btn-light btn-ghost text-nowrap justify-center my-2 mx-1 min-w-0 {action.style ??
-                            ''}"
-                        class:mx-2={buttonsLayout === "column"}
+                        class="btn btn-light btn-ghost text-nowrap justify-center w-full min-w-0 {action.style ?? ''}"
                         onclick={(event) => {
                             analyticsClient.clickPropertyMapEditor(action.actionName, action.style);
                             event.preventDefault();
@@ -195,7 +192,7 @@
                 {#if !wokaMenuData.wokaName}
                     <button
                         type="button"
-                        class="btn btn-light btn-ghost text-nowrap justify-center my-2 mx-1 w-fit"
+                        class="btn btn-light btn-ghost text-nowrap justify-center w-full"
                         onclick={(event) => {
                             event.preventDefault();
                             event.stopPropagation();

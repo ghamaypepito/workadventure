@@ -16,9 +16,7 @@ import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 import type { ActivatableInterface } from "../Game/ActivatableInterface";
 import { LL } from "../../../i18n/i18n-svelte";
 import { blackListManager } from "../../WebRtc/BlackListManager";
-import { showReportScreenStore } from "../../Stores/ShowReportScreenStore";
 import { iframeListener } from "../../Api/IframeListener";
-import banIcon from "../../Components/images/ban-icon.svg";
 import { openDirectChatRoom } from "../../Chat/Utils";
 import chat from "../../Components/images/chat.png";
 import { userIsConnected } from "../../Stores/MenuStore";
@@ -240,25 +238,9 @@ export class RemotePlayer extends Character implements ActivatableInterface {
 
     private getDefaultWokaMenuActions(): WokaMenuAction[] {
         const actions: WokaMenuAction[] = [];
-        actions.push({
-            actionName: blackListManager.isBlackListed(this.userUuid)
-                ? get(LL).report.block.unblock()
-                : get(LL).report.block.block(),
-            protected: true,
-            priority: -1,
-            style: "is-error bg-white/10 hover:bg-white/30 text-red-500",
-            testId: "wokamenu-block-user-button",
-            callback: () => {
-                // Track the report user action
-                analyticsClient.reportUser();
-
-                showReportScreenStore.set({ userUuid: this.userUuid, userName: this.playerName });
-            },
-            actionIcon: banIcon,
-        });
         if (!blackListManager.isBlackListed(this.userUuid)) {
             actions.push({
-                actionName: get(LL).chat.userList.TalkTo(),
+                actionName: "Go to Desk",
                 protected: false,
                 priority: 1,
                 style: "bg-white/10 hover:bg-white/30",
