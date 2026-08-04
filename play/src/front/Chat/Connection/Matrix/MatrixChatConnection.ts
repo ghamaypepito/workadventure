@@ -1487,6 +1487,32 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         const newRoom = new MatrixChatRoom(room);
         this.roomList.set(newRoom.id, newRoom);
         this.retargetSelectedRoomIfReplaced(newRoom);
+
+        // Whenever ANY room newly appears in the list - whether from creating it ourselves,
+        // auto-joining an invite, or a later sync catching up - check right then whether it's a
+        // direct room we already have another one for. This is the single choke point every room
+        // addition passes through, so it reliably catches a two-sided creation race regardless of
+        // which side's room synced into view first. The two more narrowly-scoped
+        // dedupeDirectRoomsFor call sites elsewhere (createDirectRoom, the DM-invite auto-join)
+        // only catch it if BOTH rooms already exist locally at that exact moment, which isn't
+        // guaranteed - each side's own just-created room can still be mid-sync when the other
+        // side's invite lands, so that check sees only one room and (correctly, for what it can
+        // see) does nothing.
+        const myUserId = this.client?.getUserId();
+        if (myUserId) {
+            const memberIDs = get(newRoom.members)
+                .filter((member) => member.id && ["join", "invite"].includes(get(member.membership)))
+                .map((member) => member.id);
+            if (memberIDs.length === 2) {
+                const counterpart = memberIDs.find((id) => id !== myUserId);
+                if (counterpart) {
+                    this.dedupeDirectRoomsFor(counterpart).catch((error) =>
+                        console.error("Failed to dedupe direct rooms : ", error),
+                    );
+                }
+            }
+        }
+
         return newRoom;
     }
 
