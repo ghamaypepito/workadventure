@@ -26,11 +26,21 @@
     // shown inline instead of letting the button silently no-op (same failure-visibility fix
     // already applied to the wave/ping toasts' quick-reply "failed" state).
     let messageUnavailable = $state(false);
+    // Set when requestSocialSignal returns false (antispam limit hit) - same failure-visibility
+    // fix as messageUnavailable, so hitting the limit here looks the same as it does anywhere
+    // else the limit can block a wave, instead of the button silently doing nothing.
+    let waveBlocked = $state(false);
 
     function wave() {
         const data = $hoverPreviewStore;
         if (!data) return;
-        gameManager.getCurrentGameScene().inviteManager?.requestSocialSignal("wave", data.userUuid, data.name, data.userId);
+        const sent = gameManager
+            .getCurrentGameScene()
+            .inviteManager?.requestSocialSignal("wave", data.userUuid, data.name, data.userId);
+        if (sent === false) {
+            waveBlocked = true;
+            return;
+        }
         // Best-effort: also drop a line in the real chat conversation so the wave shows up there
         // alongside any actual messages, not just as a proximity-area social signal. Silently
         // skipped if chatID isn't resolvable yet - the wave itself (above) already succeeded and
@@ -113,6 +123,7 @@
         const data = $hoverPreviewStore;
         if (data) {
             messageUnavailable = false;
+            waveBlocked = false;
         }
     });
 
@@ -173,6 +184,9 @@
         </div>
         {#if messageUnavailable}
             <div class="text-xxs opacity-70 text-center">Can't message - unavailable</div>
+        {/if}
+        {#if waveBlocked}
+            <div class="text-xxs opacity-70 text-center">Too many waves - try again later</div>
         {/if}
     </div>
 {/if}
