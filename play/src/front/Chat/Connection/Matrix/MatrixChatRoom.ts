@@ -1927,6 +1927,29 @@ export class MatrixChatRoom
         return this.getMembersForRoomTypeHeuristics().map((member) => member.userId);
     }
 
+    /**
+     * Timestamp of the newest real message currently known by the Matrix SDK. This deliberately
+     * ignores membership/create events so a newly-created empty duplicate does not win over an
+     * established conversation merely because its room was created more recently.
+     */
+    public getLatestMessageTimestampSync(): number | undefined {
+        const timestamps = this.matrixRoom
+            .getLiveTimeline()
+            .getEvents()
+            .filter((event) => event.getType() === EventType.RoomMessage)
+            .map((event) => event.getTs());
+        return timestamps.length === 0 ? undefined : Math.max(...timestamps);
+    }
+
+    /** Stable fallback used when two candidate DM rooms have no visible message history. */
+    public getCreationTimestampSync(): number {
+        const createEvent = this.matrixRoom
+            .getLiveTimeline()
+            .getState(EventTimeline.FORWARDS)
+            ?.getStateEvents(EventType.RoomCreate, "");
+        return createEvent?.getTs() ?? Number.MAX_SAFE_INTEGER;
+    }
+
     private getMatrixRoomType(): "direct" | "multiple" {
         if (this.hasMatrixSpaceParent()) {
             return "multiple";
@@ -1953,7 +1976,10 @@ export class MatrixChatRoom
             (member) => directRoomsPerUsers && directRoomsPerUsers[member.userId]?.includes(this.id),
         );
 
-        if (isDirectBasedOnRoomData || members.length === 2 || this.isRoomCreatedAsDirect()) {
+        // Two members alone do not make a room a DM: a private group room can temporarily have
+        // exactly two members too. Require Matrix's explicit DM metadata so those rooms are never
+        // folded into (or left by) duplicate-DM reconciliation.
+        if (isDirectBasedOnRoomData || this.isRoomCreatedAsDirect()) {
             return "direct";
         }
 
