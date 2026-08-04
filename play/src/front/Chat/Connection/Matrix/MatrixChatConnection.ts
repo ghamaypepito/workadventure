@@ -1561,6 +1561,20 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
                             console.error("Failed to joinRoom : ", e);
                             this.createAndAddNewRootRoom(room);
                         });
+                    } else if (room.getDMInviter()) {
+                        // Auto-accept 1:1 direct-message invites the same way admin invites are
+                        // auto-joined above - a DM invite is never something to screen/decline in
+                        // this app (there's no concept of an unwanted 1:1 chat request), and
+                        // leaving it pending in the "Invitations" list is exactly what caused
+                        // duplicate DM rooms: getDirectRoomFor's un-accepted-invite fix stops new
+                        // duplicates once found, but the room only becomes visible as an ordinary
+                        // DM (out of the pending list) once actually joined. Use the wrapper
+                        // joinRoom(), not the raw client call above, so addDMRoomInAccountData
+                        // still runs and the room is correctly flagged "direct" for this client too.
+                        this.joinRoom(room.roomId).catch((e) => {
+                            console.error("Failed to auto-join direct message invite : ", e);
+                            this.createAndAddNewRootRoom(room);
+                        });
                     }
 
                     this.detachRoomFromRootLists(room.roomId);
