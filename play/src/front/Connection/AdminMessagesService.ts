@@ -6,6 +6,7 @@ export enum AdminMessageEventTypes {
     audio = "audio",
     ban = "ban",
     banned = "banned",
+    duplicateSession = "duplicateSession",
 }
 
 interface AdminMessageEvent {
@@ -22,7 +23,7 @@ class AdminMessagesService {
 
     onSendusermessage(message: SendUserMessage | BanUserMessage) {
         this._messageStream.next({
-            type: message.type as unknown as AdminMessageEventTypes,
+            type: message.type,
             text: message.message,
         });
     }

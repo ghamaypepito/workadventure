@@ -298,8 +298,11 @@ export class GameRoom implements BrothersFinder {
             }
         }
 
-        // Same-tab reconnections should not be reported as duplicate sessions.
-        const sameUserAlreadyConnected = (this.getUsersByUuid(joinRoomMessage.userUuid)?.size ?? 0) >= 1;
+        // Same-tab reconnections are already handled above (stale tabId cleanup, killed immediately).
+        // Anyone still registered under this UUID at this point is a genuinely different tab/window -
+        // captured here (before the new user is added below) so they can be kicked once the new
+        // connection has taken over, enforcing a single active session per room per user.
+        const staleSessionsToKick = Array.from(this.getUsersByUuid(joinRoomMessage.userUuid));
 
         this.nextUserId++;
         const user = await User.create(
@@ -350,12 +353,27 @@ export class GameRoom implements BrothersFinder {
             admin.sendUserJoin(user.uuid, user.name, user.IPAddress);
         }
 
-        // If the same user was already connected before this join, notify this new (duplicate) connection
-        if (sameUserAlreadyConnected) {
-            user.write({
-                $case: "duplicateUserConnectedMessage",
-                duplicateUserConnectedMessage: {},
+        // A new tab/window just took over this user's session in this room - kick every other tab
+        // still connected under the same UUID, so exactly one session is ever active at a time.
+        // Reuses the same "warn, then disconnect after a grace period" pattern as the admin ban flow
+        // (SocketManager.handleBanUserMessage): the grace period gives the front-end time to show the
+        // message and close its own connection cleanly, avoiding the auto-reconnect path a hard,
+        // unannounced server-side close would otherwise trigger on that other tab.
+        for (const staleUser of staleSessionsToKick) {
+            staleUser.write({
+                $case: "sendUserMessage",
+                sendUserMessage: {
+                    type: "duplicateSession",
+                    message: "You opened WorkAdventure in another tab or window, so this session was closed.",
+                },
             });
+            setTimeout(() => {
+                this.leave(staleUser);
+                endUserConnectionWithReason(
+                    staleUser.socket,
+                    `User ${joinRoomMessage.userUuid} opened a new session in another tab.`,
+                );
+            }, 3000);
         }
 
         return user;

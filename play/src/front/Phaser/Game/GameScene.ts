@@ -2215,6 +2215,7 @@ export class GameScene extends DirtyScene {
                 this._sayManager = new SayManager(this.connection, this.CurrentPlayer);
 
                 userMessageManager.setReceiveBanListener(this.bannedUser.bind(this));
+                userMessageManager.setReceiveDuplicateSessionListener(this.duplicateSessionKicked.bind(this));
 
                 this.CurrentPlayer.on(hasMovedEventName, (event: HasPlayerMovedInterface) => {
                     this.handleCurrentPlayerHasMovedEvent(event);
@@ -4375,6 +4376,29 @@ ${escapedMessage}
                 title: "BANNED",
                 subtitle: "You were banned from WorkAdventure",
                 details: "If you want more information, you may contact us at: hello@workadventu.re",
+            }),
+        );
+
+        this.cleanupClosingScene();
+
+        this.userInputManager.disableControls("errorScreen");
+        this.userInputManager.disableRightClick();
+    }
+
+    // The server enforces a single active session per user per room: opening a second tab/window
+    // kicks any earlier one still connected here. cleanupClosingScene() below closes this tab's own
+    // connection cleanly (code 1000) as soon as this message arrives, rather than waiting for the
+    // server's own follow-up disconnect - that self-close is what keeps this from racing into the
+    // normal auto-reconnect path (which would otherwise immediately re-open a session and kick
+    // whichever tab is now newest, back and forth).
+    private duplicateSessionKicked(message: string) {
+        errorScreenStore.setError(
+            ErrorScreenMessage.fromPartial({
+                type: "error",
+                code: "DUPLICATE_SESSION",
+                title: "Session moved",
+                subtitle: message,
+                details: "You can keep using WorkAdventure in the other tab or window.",
             }),
         );
 
