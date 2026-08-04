@@ -25,7 +25,7 @@
 
     let { user, isMatrixChatEnabled = true }: Props = $props();
 
-    let showRoomCreationInProgress = false;
+    let showRoomCreationInProgress = $state(false);
 
     let { chatId, availabilityStatus, username = "", color, isAdmin, pictureStore } = $derived(user);
 
@@ -54,8 +54,6 @@
             query: $chatSearchBarValue,
         }),
     );
-
-    const roomCreationInProgress = gameManager.chatConnection.roomCreationInProgress;
 
     function getNameOfAvailabilityStatus(status: AvailabilityStatus) {
         switch (status) {
@@ -199,10 +197,14 @@
                             class:text-white={user.chatId !== undefined}
                             class:text-gray-400={user.chatId === undefined}
                             data-testId={`send-message-${user.username}`}
-                            disabled={user.chatId === undefined}
-                            onclick={(event) => {
+                            disabled={user.chatId === undefined || showRoomCreationInProgress}
+                            onclick={async (event) => {
                                 event.stopPropagation();
-                                openDirectChatRoom(chatId).catch((error) => {
+                                showRoomCreationInProgress = true;
+                                analyticsClient.sendMessageFromUserList();
+                                try {
+                                    await openDirectChatRoom(chatId);
+                                } catch (error) {
                                     console.error("Error opening direct chat room:", error);
                                     Sentry.captureException(error, {
                                         extra: {
@@ -212,8 +214,9 @@
                                             username: user.username,
                                         },
                                     });
-                                });
-                                analyticsClient.sendMessageFromUserList();
+                                } finally {
+                                    showRoomCreationInProgress = false;
+                                }
                             }}
                         >
                             <IconSend font-size="16" />
@@ -232,7 +235,7 @@
                             </div>
                         {/if}
                     </div>
-                {:else if $roomCreationInProgress && showRoomCreationInProgress}
+                {:else if showRoomCreationInProgress}
                     <div class="min-h-[30px] text-md flex gap-2 justify-center flex-row items-center p-1">
                         <IconLoader class="animate-spin" />
                     </div>

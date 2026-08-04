@@ -63,7 +63,7 @@
         <DroppingFileScene />
     </div>
 {/if}
-{#if $duplicateUserConnectedStore}
+{#if $duplicateUserConnectedStore !== "none"}
     <DuplicateUserConnectedModal />
 {/if}
 {#if $errorScreenStore !== undefined}
