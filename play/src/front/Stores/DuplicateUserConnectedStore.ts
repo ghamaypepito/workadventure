@@ -1,23 +1,31 @@
 import { writable } from "svelte/store";
+import { localUserStore } from "../Connection/LocalUserStore";
 
-export type DuplicateSessionState = "none" | "duplicate" | "switching" | "moved" | "kept-other";
-export const SESSION_TAKEOVER_ON_RECONNECT_KEY = "workadventure_session_takeover_on_reconnect";
+export const DUPLICATE_USER_DONT_REMIND_KEY = "workadventure_duplicate_user_dont_remind";
+
+/**
+ * Returns false if the user chose "don't remind again", so the popup should not be shown.
+ */
+export function shouldShowDuplicateUserPopup(): boolean {
+    try {
+        return !localUserStore.getDuplicateUserDontRemind();
+    } catch {
+        return true;
+    }
+}
 
 /**
  * Set to true when the back sends duplicateUserConnectedMessage (same user already connected elsewhere).
  * The UI should show a popup. Not shown if user previously chose "don't remind again" (localStorage).
  */
 function createDuplicateUserConnectedStore() {
-    const { subscribe, set } = writable<DuplicateSessionState>("none");
+    const { subscribe, set } = writable<boolean>(false);
 
     return {
         subscribe,
         setDuplicateConnected: (value: boolean): void => {
-            set(value ? "duplicate" : "none");
+            set(value);
         },
-        setSwitching: (): void => set("switching"),
-        setSessionMoved: (): void => set("moved"),
-        setKeptOther: (): void => set("kept-other"),
     };
 }
 

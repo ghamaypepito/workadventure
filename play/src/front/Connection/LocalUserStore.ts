@@ -55,6 +55,7 @@ const chatSideBarWidthKey = "chatSideBarWidth";
 const mapEditorSideBarWidthKey = "mapEditorSideBarWidthKey";
 const bubbleSound = "bubbleSound";
 const notAskAgainHelpWebRtcSettingsPopup = "notAskAgainHelpWebRtcSettingsPopup";
+const duplicateUserDontRemindKey = "workadventure_duplicate_user_dont_remind";
 const recordingsViewMode = "wa-recordings-view-mode";
 export const languageKey = "language";
 const customStatusMessageKey = "customStatusMessage";
@@ -261,6 +262,14 @@ class LocalUserStore {
 
     getNotAskAgainHelpWebRtcSettingsPopup(): boolean {
         return localStorage.getItem(notAskAgainHelpWebRtcSettingsPopup) === "true";
+    }
+
+    setDuplicateUserDontRemind(value: boolean): void {
+        localStorage.setItem(duplicateUserDontRemindKey, value ? "1" : "0");
+    }
+
+    getDuplicateUserDontRemind(): boolean {
+        return localStorage.getItem(duplicateUserDontRemindKey) === "1";
     }
 
     setRecordingsViewMode(value: "list" | "card"): void {

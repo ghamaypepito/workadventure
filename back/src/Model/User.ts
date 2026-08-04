@@ -1,4 +1,3 @@
-import { randomUUID } from "crypto";
 import type { ServerDuplexStream } from "@grpc/grpc-js";
 import * as Sentry from "@sentry/node";
 import type {
@@ -27,8 +26,6 @@ import type { PointInterface } from "./Websocket/PointInterface";
 export type UserSocket = ServerDuplexStream<PusherToBackMessage, ServerToClientMessage>;
 
 export class User implements Movable, CustomJsonReplacerInterface {
-    /** Unique to this concrete browser connection, including across maps. */
-    public readonly sessionId = randomUUID();
     private readonly movedSubject = new Subject<PointInterface>();
     public readonly moved$ = this.movedSubject.asObservable();
 

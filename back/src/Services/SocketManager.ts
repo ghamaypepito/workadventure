@@ -85,7 +85,6 @@ import { clientEventsEmitter } from "./ClientEventsEmitter";
 import { getMapStorageClient } from "./MapStorageClient";
 import { emitError, endUserConnectionWithReason } from "./MessageHelpers";
 import { cpuTracker } from "./CpuTracker";
-import { activeSessionCoordinator } from "./ActiveSessionCoordinator";
 
 const debug = Debug("socketmanager");
 
@@ -188,21 +187,6 @@ export class SocketManager {
 
     public async handleJoinRoom(socket: UserSocket, room: GameRoom, joinRoomMessage: JoinRoomMessage): Promise<User> {
         const user = await room.join(socket, joinRoomMessage);
-
-        if (user.isLogged) {
-            const registration = await activeSessionCoordinator.register({
-                sessionId: user.sessionId,
-                userUuid: user.uuid,
-                tabId: user.tabId,
-                disconnect: (notifyBrowser) => this.disconnectReplacedSession(room, user, notifyBrowser),
-            });
-            if (registration.duplicate) {
-                user.write({
-                    $case: "duplicateUserConnectedMessage",
-                    duplicateUserConnectedMessage: {},
-                });
-            }
-        }
 
         clientEventsEmitter.clientJoinSubject.next({ clientUUid: user.uuid, roomId: room.roomUrl });
 
@@ -354,26 +338,8 @@ export class SocketManager {
             room.leave(user);
             this.cleanupRoomIfEmpty(room);
         } finally {
-            if (user.isLogged) {
-                activeSessionCoordinator.release(user.sessionId).catch((error) => {
-                    console.error("Failed to release active office session", error);
-                    Sentry.captureException(error);
-                });
-            }
             clientEventsEmitter.clientLeaveSubject.next({ clientUUid: user.uuid, roomId: room.roomUrl });
         }
-    }
-
-    private disconnectReplacedSession(room: GameRoom, user: User, notifyBrowser: boolean): void {
-        if (user.disconnected) return;
-        if (notifyBrowser) user.write({ $case: "sessionReplacedMessage", sessionReplacedMessage: {} });
-        this.leaveRoom(room, user);
-        endUserConnectionWithReason(
-            user.socket,
-            notifyBrowser
-                ? "This office session was moved to another browser."
-                : "A new connection from the same browser tab replaced this connection.",
-        );
     }
 
     async getOrCreateRoom(roomId: string): Promise<GameRoom> {
@@ -735,16 +701,6 @@ export class SocketManager {
                     answerMessage.answer = {
                         $case: "sendEventAnswer",
                         sendEventAnswer: {},
-                    };
-                    break;
-                }
-                case "takeOverSessionQuery": {
-                    if (!user.isLogged) throw new Error("Only authenticated users can take over an office session");
-                    answerMessage.answer = {
-                        $case: "takeOverSessionAnswer",
-                        takeOverSessionAnswer: {
-                            success: await activeSessionCoordinator.takeOver(user.sessionId),
-                        },
                     };
                     break;
                 }

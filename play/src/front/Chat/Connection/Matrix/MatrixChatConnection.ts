@@ -123,12 +123,6 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
      */
     private readonly matrixClientRoomManageQueue: Room[] = [];
     private matrixClientRoomManageQueuePumpBusy = false;
-    /** Coalesces rapid clicks/quick replies for the same peer into one Matrix room creation. */
-    private readonly directRoomCreationPromises = new Map<
-        string,
-        Promise<(ChatRoom & ChatRoomMembershipManagement) | undefined>
-    >();
-    private readonly directRoomReconciliationPromises = new Map<string, Promise<void>>();
     nbUnreadInvitationsMessages: Readable<number>;
     nbUnreadDirectRoomsMessages: Readable<number>;
     nbUnreadRoomsMessages: Readable<number>;
@@ -168,12 +162,9 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         this.connectionStatus = writable("CONNECTING");
         this.roomList = new AutoDestroyingMapStore<string, MatrixChatRoom>();
         this.clientPromise = clientPromise;
-        const joinedDirectRooms = this.createJoinedRoomsReadable(
+        this.directRooms = this.createJoinedRoomsReadable(
             (room) => get(room.myMembership) === KnownMembership.Join && get(room.type) === "direct",
         );
-        // Leaving a duplicate is asynchronous. Hide it immediately so the sidebar never flashes
-        // multiple conversations for the same Matrix user while the membership event catches up.
-        this.directRooms = derived(joinedDirectRooms, (rooms) => this.getCanonicalDirectRooms(rooms));
 
         this.directRoomsUsers = derived(
             [this.directRooms, this.statusStore],
@@ -185,18 +176,17 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
                     return [];
                 }
 
-                const seenUserIds = new Set<string>();
                 return directRooms.reduce((acc, currentRoom) => {
-                    currentRoom.getMemberIdsSync().forEach((memberId) => {
-                        if (memberId === myUserID || seenUserIds.has(memberId)) return;
-                        const user = this.client?.getUser(memberId);
-                        if (user) {
-                            seenUserIds.add(memberId);
-                            const availabilityStatus = this.getOrCreateUserAvailabilityStore(
-                                user.userId,
-                                user.presence,
-                            );
-                            acc.push(chatUserFactory(user, client, { availabilityStatus }));
+                    get(currentRoom.members).forEach((member) => {
+                        if (member.id !== myUserID) {
+                            const user = this.client?.getUser(member.id);
+                            if (user) {
+                                const availabilityStatus = this.getOrCreateUserAvailabilityStore(
+                                    user.userId,
+                                    user.presence,
+                                );
+                                acc.push(chatUserFactory(user, client, { availabilityStatus }));
+                            }
                         }
                     });
                     return acc;
@@ -763,7 +753,6 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
             case SyncState.Prepared:
                 this.connectionStatus.set("ONLINE");
                 this.isClientReady = true;
-                this.reconcileAllDirectRooms();
                 break;
             case SyncState.Error:
                 this.connectionStatus.set("ON_ERROR");
@@ -1097,7 +1086,6 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
     private onAccountDataEvent(event: MatrixEvent) {
         if (event.getType() === EventType.Direct) {
             this.refreshRawUnreadRoomKinds();
-            this.reconcileAllDirectRooms();
         }
         if (event.getType() === "m.push_rules") {
             const content = event.getContent();
@@ -1515,13 +1503,15 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         // store starts out empty and only populates once the room has actually been opened in the
         // UI, so reading it here, synchronously right after construction, always saw zero members
         // and silently skipped this check every single time.
-        const myUserId = this.client?.getUserId?.();
+        const myUserId = this.client?.getUserId();
         if (myUserId) {
             const memberIDs = newRoom.getMemberIdsSync();
-            if (get(newRoom.type) === "direct" && memberIDs.length === 2) {
+            if (memberIDs.length === 2) {
                 const counterpart = memberIDs.find((id) => id !== myUserId);
                 if (counterpart) {
-                    this.reconcileDirectRoomsFor(counterpart).catch(() => undefined);
+                    this.dedupeDirectRoomsFor(counterpart).catch((error) =>
+                        console.error("Failed to dedupe direct rooms : ", error),
+                    );
                 }
             }
         }
@@ -1571,13 +1561,6 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
             prevMembership,
         );
         const { roomId } = room;
-        const roomInList = this.roomList.get(roomId);
-        const myUserId = this.client?.getUserId?.();
-        if (roomInList && myUserId && get(roomInList.type) === "direct") {
-            const memberIds = roomInList.getMemberIdsSync();
-            const counterpart = memberIds.length === 2 ? memberIds.find((id) => id !== myUserId) : undefined;
-            if (counterpart) this.reconcileDirectRoomsFor(counterpart).catch(() => undefined);
-        }
         if (membership !== prevMembership && membership === KnownMembership.Join) {
             this.detachRoomFromRootLists(roomId);
 
@@ -1626,7 +1609,7 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
                                     // visible: if we (or dmInviterId) independently created our own
                                     // room for each other moments apart, both now exist in our room
                                     // list - see dedupeDirectRoomsFor.
-                                    this.reconcileDirectRoomsFor(dmInviterId),
+                                    this.dedupeDirectRoomsFor(dmInviterId),
                                 )
                                 .catch((e) => {
                                     console.error("Failed to auto-join direct message invite : ", e);
@@ -1863,26 +1846,7 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
 
         if (existingDirectRoom) return existingDirectRoom;
 
-        const pendingCreation = this.directRoomCreationPromises.get(userToInvite);
-        if (pendingCreation) return pendingCreation;
-
-        const creationPromise = this.createDirectRoomOnce(userToInvite);
-        this.directRoomCreationPromises.set(userToInvite, creationPromise);
         this.roomCreationInProgress.set(true);
-
-        try {
-            return await creationPromise;
-        } finally {
-            this.directRoomCreationPromises.delete(userToInvite);
-            this.roomCreationInProgress.set(this.directRoomCreationPromises.size > 0);
-        }
-    }
-
-    private async createDirectRoomOnce(
-        userToInvite: string,
-    ): Promise<(ChatRoom & ChatRoomMembershipManagement) | undefined> {
-        const client = this.client;
-        if (!client) throw new Error(CLIENT_NOT_INITIALIZED_ERROR_MSG);
 
         const createRoomOptions = {
             //TODO not clean code
@@ -1893,7 +1857,7 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         } as CreateRoomOptions;
 
         try {
-            const { room_id } = await client.createRoom({
+            const { room_id } = await this.client.createRoom({
                 visibility: "private" as Visibility | undefined,
                 invite: createRoomOptions.invite?.map((invitation) => invitation.value) ?? [],
                 is_direct: true,
@@ -1905,7 +1869,7 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
             //Wait Sync Event before use/update roomList otherwise room not exist in the client
             await this.waitForNextSync();
 
-            const room = client.getRoom(room_id);
+            const room = this.client.getRoom(room_id);
             if (!room) return;
             const newRoom = this.createAndAddNewRootRoom(room);
             // Defensive backstop for the narrow window between this function's own
@@ -1913,17 +1877,18 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
             // actual race this guards against (the far more common case: the other side's
             // already-existing invite arriving via sync afterward is handled where that's
             // received, in onRoomEventMembership).
-            await this.reconcileDirectRoomsFor(userToInvite);
+            await this.dedupeDirectRoomsFor(userToInvite);
             return this.getDirectRoomFor(userToInvite) ?? newRoom;
         } catch (error) {
             throw this.handleMatrixError(error);
+        } finally {
+            this.roomCreationInProgress.set(false);
         }
     }
 
     getDirectRoomFor(userID: string): (ChatRoom & ChatRoomMembershipManagement) | undefined {
         const directRooms = Array.from(this.roomList.values())
             .filter((room) => {
-                if (get(room.type) !== "direct") return false;
                 // getMemberIdsSync(), NOT get(room.members) - that store stays empty until the
                 // user has actually opened this specific room in the UI (ensureMembersInitialized
                 // is lazy), so a duplicate/older room they haven't clicked into yet would look
@@ -1945,7 +1910,10 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         if (directRooms.length === 1) return directRooms[0];
         // More than one match can genuinely happen (see dedupeDirectRoomsFor) in the moments
         // right after a creation race, before the older duplicate has actually been left yet.
-        return directRooms.slice().sort((a, b) => this.compareDirectRooms(a, b))[0];
+        // Pick deterministically (lowest room ID) rather than Map iteration order, so this
+        // matches dedupeDirectRoomsFor's own choice of which room to keep - both clients agree
+        // on the same "canonical" room without needing to coordinate.
+        return directRooms.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0];
     }
 
     /**
@@ -1955,8 +1923,8 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
      * artificial delay to every single first message to prevent this (the race is rare; the delay
      * would be paid on every brand new conversation, for everyone), let it happen and clean up
      * once the second room becomes visible: if more than one direct room exists for this
-     * counterpart, leave every one except the deterministically canonical one (prefer real message
-     * history, then the oldest room, then room id), which both clients independently agree on.
+     * counterpart, leave every one except the deterministically "canonical" one (lowest room ID -
+     * see getDirectRoomFor), which both clients independently agree on without coordinating.
      * History in a left room remains in that room's own timeline while still a member; it's just
      * no longer the room used going forward.
      */
@@ -1965,121 +1933,19 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         // pattern: the store is empty for any room the user hasn't opened yet, which is exactly
         // the duplicate this function exists to catch.
         const directRooms = Array.from(this.roomList.values()).filter((room) => {
-            if (get(room.type) !== "direct") return false;
             const memberIDs = room.getMemberIdsSync();
             return memberIDs.length === 2 && memberIDs.includes(userID);
         });
         if (directRooms.length <= 1) return;
-        const sorted = directRooms.slice().sort((a, b) => this.compareDirectRooms(a, b));
-        const canonicalRoom = sorted[0];
+        const sorted = directRooms.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
         const duplicates = sorted.slice(1);
-
-        console.info("Reconciling duplicate direct-message rooms", {
-            userId: userID,
-            canonicalRoomId: canonicalRoom.id,
-            duplicateRoomIds: duplicates.map(({ id }) => id),
-        });
-
-        const selectedRoom = get(selectedRoomStore);
-        if (selectedRoom && duplicates.some((room) => room.id === selectedRoom.id)) {
-            selectedRoomStore.set(canonicalRoom);
-        }
-
-        await this.replaceDirectRoomAccountData(userID, canonicalRoom.id, new Set(duplicates.map(({ id }) => id)));
-
-        await Promise.all(
-            duplicates.map(async (duplicate) => {
-                try {
-                    await duplicate.leaveRoom();
-                } catch (error) {
-                    console.error("Failed to leave duplicate direct room", { duplicateRoomId: duplicate.id, error });
-                    Sentry.captureException(error, {
-                        extra: { userId: userID, canonicalRoomId: canonicalRoom.id, duplicateRoomId: duplicate.id },
-                    });
-                }
-            }),
-        );
-    }
-
-    private reconcileDirectRoomsFor(userId: string): Promise<void> {
-        const inFlight = this.directRoomReconciliationPromises.get(userId);
-        if (inFlight) return inFlight;
-
-        const reconciliation = this.dedupeDirectRoomsFor(userId)
-            .catch((error) => {
-                console.error("Failed to reconcile duplicate direct-message rooms", { userId, error });
-                Sentry.captureException(error, { extra: { userId } });
-            })
-            .finally(() => this.directRoomReconciliationPromises.delete(userId));
-        this.directRoomReconciliationPromises.set(userId, reconciliation);
-        return reconciliation;
-    }
-
-    private reconcileAllDirectRooms(): void {
-        const myUserId = this.client?.getUserId?.();
-        if (!myUserId) return;
-        const peers = new Set<string>();
-        for (const room of this.roomList.values()) {
-            if (get(room.type) !== "direct") continue;
-            const memberIds = room.getMemberIdsSync();
-            const counterpart = memberIds.length === 2 ? memberIds.find((id) => id !== myUserId) : undefined;
-            if (counterpart) peers.add(counterpart);
-        }
-        peers.forEach((peerId) => {
-            this.reconcileDirectRoomsFor(peerId).catch(() => undefined);
-        });
-    }
-
-    private compareDirectRooms(left: MatrixChatRoom, right: MatrixChatRoom): number {
-        const leftMessageTimestamp = left.getLatestMessageTimestampSync();
-        const rightMessageTimestamp = right.getLatestMessageTimestampSync();
-        const leftHasHistory = leftMessageTimestamp !== undefined;
-        const rightHasHistory = rightMessageTimestamp !== undefined;
-        if (leftHasHistory !== rightHasHistory) return leftHasHistory ? -1 : 1;
-
-        const creationDifference = left.getCreationTimestampSync() - right.getCreationTimestampSync();
-        if (creationDifference !== 0) return creationDifference;
-        return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
-    }
-
-    private getCanonicalDirectRooms(rooms: MatrixChatRoom[]): MatrixChatRoom[] {
-        const myUserId = this.client?.getUserId?.();
-        if (!myUserId) return rooms;
-
-        const roomsByPeer = new Map<string, MatrixChatRoom[]>();
-        const ungroupedRooms: MatrixChatRoom[] = [];
-        for (const room of rooms) {
-            const peerIds = room.getMemberIdsSync().filter((memberId) => memberId !== myUserId);
-            if (peerIds.length !== 1) {
-                ungroupedRooms.push(room);
-                continue;
+        for (const duplicate of duplicates) {
+            try {
+                await duplicate.leaveRoom();
+            } catch (error) {
+                console.error("Failed to leave duplicate direct room : ", error);
             }
-            const peerRooms = roomsByPeer.get(peerIds[0]) ?? [];
-            peerRooms.push(room);
-            roomsByPeer.set(peerIds[0], peerRooms);
         }
-
-        return [
-            ...ungroupedRooms,
-            ...Array.from(roomsByPeer.values()).map(
-                (peerRooms) => peerRooms.slice().sort((a, b) => this.compareDirectRooms(a, b))[0],
-            ),
-        ];
-    }
-
-    private async replaceDirectRoomAccountData(
-        userId: string,
-        canonicalRoomId: string,
-        duplicateRoomIds: Set<string>,
-    ): Promise<void> {
-        if (!this.client) throw new Error(CLIENT_NOT_INITIALIZED_ERROR_MSG);
-        const current = this.client.getAccountData(EventType.Direct)?.getContent() ?? {};
-        const next: Record<string, string[]> = {};
-        for (const [peerId, roomIds] of Object.entries(current)) {
-            next[peerId] = [...new Set((roomIds as string[]).filter((roomId) => !duplicateRoomIds.has(roomId)))];
-        }
-        next[userId] = [canonicalRoomId];
-        await this.client.setAccountData(EventType.Direct, next);
     }
 
     async searchChatUsers(searchText: string, limit = 20) {
@@ -2221,8 +2087,8 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         if (!this.client) {
             throw new Error(CLIENT_NOT_INITIALIZED_ERROR_MSG);
         }
-        const current: Record<string, string[]> = this.client.getAccountData(EventType.Direct)?.getContent() || {};
-        const directMap = { ...current, [userId]: [...new Set([...(current[userId] || []), roomId])] };
+        const directMap: Record<string, string[]> = this.client.getAccountData(EventType.Direct)?.getContent() || {};
+        directMap[userId] = [...(directMap[userId] || []), roomId];
         await this.client.setAccountData(EventType.Direct, directMap);
     }
 

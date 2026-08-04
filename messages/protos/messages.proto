@@ -542,7 +542,6 @@ message QueryMessage {
     GetSignedUrlQuery getSignedUrlQuery = 19;
     StartRecordingQuery startRecordingQuery = 21;
     StopRecordingQuery stopRecordingQuery = 22;
-    TakeOverSessionQuery takeOverSessionQuery = 23;
   }
 }
 
@@ -636,10 +635,6 @@ message StopRecordingQuery {
   string spaceName = 1;
 }
 
-/** Transfers the authenticated office session to the requesting browser. */
-message TakeOverSessionQuery {
-}
-
 message AnswerMessage {
   int32 id = 1;
   oneof answer {
@@ -665,12 +660,7 @@ message AnswerMessage {
     GetSignedUrlAnswer getSignedUrlAnswer = 21;
     StartRecordingAnswer startRecordingAnswer = 22;
     StopRecordingAnswer stopRecordingAnswer = 23;
-    TakeOverSessionAnswer takeOverSessionAnswer = 24;
   }
-}
-
-message TakeOverSessionAnswer {
-  bool success = 1;
 }
 
 
@@ -1350,10 +1340,6 @@ message LeaveSpaceRequestMessage {
 message DuplicateUserConnectedMessage {
 }
 
-/** Sent to the previous browser after another browser takes ownership of the account session. */
-message SessionReplacedMessage {
-}
-
 /**
  * Internal message sent by the back to the pusher just before closing the
  * joinRoom stream. The pusher must consume it and never forward it to the
@@ -1401,7 +1387,6 @@ message ServerToClientMessage {
     DuplicateUserConnectedMessage duplicateUserConnectedMessage = 41;
     BackConnectionCloseReasonMessage backConnectionCloseReasonMessage = 42;
     SocialSignalReceivedMessage socialSignalReceivedMessage = 43;
-    SessionReplacedMessage sessionReplacedMessage = 44;
   }
 }
 

@@ -298,6 +298,9 @@ export class GameRoom implements BrothersFinder {
             }
         }
 
+        // Same-tab reconnections should not be reported as duplicate sessions.
+        const sameUserAlreadyConnected = (this.getUsersByUuid(joinRoomMessage.userUuid)?.size ?? 0) >= 1;
+
         this.nextUserId++;
         const user = await User.create(
             this.nextUserId,
@@ -345,6 +348,14 @@ export class GameRoom implements BrothersFinder {
         // Notify admins
         for (const admin of this.admins) {
             admin.sendUserJoin(user.uuid, user.name, user.IPAddress);
+        }
+
+        // If the same user was already connected before this join, notify this new (duplicate) connection
+        if (sameUserAlreadyConnected) {
+            user.write({
+                $case: "duplicateUserConnectedMessage",
+                duplicateUserConnectedMessage: {},
+            });
         }
 
         return user;

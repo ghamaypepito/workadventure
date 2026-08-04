@@ -29,19 +29,10 @@ const warning: BaseTranslation = {
     },
     duplicateUserConnected: {
         title: "Already connected",
-        message: "This account is active in another browser. Choose which browser should stay connected to the office.",
+        message:
+            "You are already connected to this room from another tab or device. To avoid conflicts, please close the other tab or window.",
         confirmContinue: "I understand, continue",
         dontRemindAgain: "Don't show this message again",
-        switchHere: "Switch to this browser",
-        keepOther: "Keep the other browser",
-        switching: "Switching…",
-        switchFailed: "The session could not be switched. Please try again.",
-        movedTitle: "Session moved",
-        movedMessage: "Your office session is now active in another browser. This browser has been disconnected.",
-        switchBack: "Use this browser instead",
-        keptTitle: "Other browser kept active",
-        keptMessage: "This browser is disconnected. Your existing office session is still active in the other browser.",
-        tryAgain: "Connect this browser",
     },
     browserNotSupported: {
         title: "😢 Browser Not Supported",

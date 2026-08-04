@@ -112,7 +112,7 @@ import { SelectCharacterScene, SelectCharacterSceneName } from "../Phaser/Login/
 import { SelectCompanionScene, SelectCompanionSceneName } from "../Phaser/Login/SelectCompanionScene";
 import { chatZoneLiveStore } from "../Stores/ChatStore";
 import { errorScreenStore } from "../Stores/ErrorScreenStore";
-import { duplicateUserConnectedStore, SESSION_TAKEOVER_ON_RECONNECT_KEY } from "../Stores/DuplicateUserConnectedStore";
+import { duplicateUserConnectedStore, shouldShowDuplicateUserPopup } from "../Stores/DuplicateUserConnectedStore";
 import { followRoleStore, followUsersStore } from "../Stores/FollowStore";
 import { isSpeakerStore, requestedMicrophoneState, requestedCameraState } from "../Stores/MediaStore";
 import { currentLiveStreamingSpaceStore } from "../Stores/MegaphoneStore";
@@ -459,7 +459,9 @@ export class RoomConnection implements RoomConnection {
                                     break;
                                 }
                                 case "duplicateUserConnectedMessage": {
-                                    this.handleDuplicateUserConnected();
+                                    if (shouldShowDuplicateUserPopup()) {
+                                        duplicateUserConnectedStore.setDuplicateConnected(true);
+                                    }
                                     break;
                                 }
                                 // FIXME: not sure where kickOffMessage belongs
@@ -724,12 +726,9 @@ export class RoomConnection implements RoomConnection {
                     break;
                 }
                 case "duplicateUserConnectedMessage": {
-                    this.handleDuplicateUserConnected();
-                    break;
-                }
-                case "sessionReplacedMessage": {
-                    duplicateUserConnectedStore.setSessionMoved();
-                    this.closeConnection();
+                    if (shouldShowDuplicateUserPopup()) {
+                        duplicateUserConnectedStore.setDuplicateConnected(true);
+                    }
                     break;
                 }
                 case "answerMessage": {
@@ -965,34 +964,6 @@ export class RoomConnection implements RoomConnection {
         this.socket?.close(1000, "Room connection closed");
         this.cleanupConnection(true);
         this._closed = true;
-    }
-
-    public async takeOverSession(): Promise<boolean> {
-        const answer = await this.query({
-            $case: "takeOverSessionQuery",
-            takeOverSessionQuery: {},
-        });
-        if (answer.$case !== "takeOverSessionAnswer") {
-            throw new Error("Unexpected session takeover answer");
-        }
-        return answer.takeOverSessionAnswer.success;
-    }
-
-    private handleDuplicateUserConnected(): void {
-        if (sessionStorage.getItem(SESSION_TAKEOVER_ON_RECONNECT_KEY) !== "1") {
-            duplicateUserConnectedStore.setDuplicateConnected(true);
-            return;
-        }
-
-        sessionStorage.removeItem(SESSION_TAKEOVER_ON_RECONNECT_KEY);
-        duplicateUserConnectedStore.setSwitching();
-        this.takeOverSession()
-            .then((success) => duplicateUserConnectedStore.setDuplicateConnected(!success))
-            .catch((error) => {
-                console.error("Failed to switch the office session back to this browser", error);
-                Sentry.captureException(error);
-                duplicateUserConnectedStore.setDuplicateConnected(true);
-            });
     }
 
     public sharePosition(
