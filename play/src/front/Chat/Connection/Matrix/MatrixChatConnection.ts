@@ -1498,11 +1498,22 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         // guaranteed - each side's own just-created room can still be mid-sync when the other
         // side's invite lands, so that check sees only one room and (correctly, for what it can
         // see) does nothing.
+        //
+        // Read members off the raw SDK `room`, NOT `newRoom.members` - that store starts out empty
+        // ([]) and is only populated later by an async initialization promise, so reading it here,
+        // synchronously right after construction, always saw zero members and silently skipped
+        // this check every single time. `room.getMembers()` reflects the SDK's already-loaded local
+        // state immediately, the same source MatrixChatRoom itself uses for its own direct-room-type
+        // heuristics (see getMembersForRoomTypeHeuristics).
         const myUserId = this.client?.getUserId();
         if (myUserId) {
-            const memberIDs = get(newRoom.members)
-                .filter((member) => member.id && ["join", "invite"].includes(get(member.membership)))
-                .map((member) => member.id);
+            const memberIDs = room
+                .getMembers()
+                .filter(
+                    (member) =>
+                        member.membership === KnownMembership.Join || member.membership === KnownMembership.Invite,
+                )
+                .map((member) => member.userId);
             if (memberIDs.length === 2) {
                 const counterpart = memberIDs.find((id) => id !== myUserId);
                 if (counterpart) {
