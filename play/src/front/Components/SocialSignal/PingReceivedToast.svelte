@@ -30,17 +30,9 @@
 
     function pingBack() {
         const scene = gameManager.getCurrentGameScene();
+        // requestSocialSignal already logs this into the real direct-message conversation with
+        // this person (see InviteManager.ts) - no need to do it again here.
         scene.inviteManager?.requestSocialSignal("ping", senderUserUuid, actorName, senderUserId);
-        // Best-effort: also drop a line in the real chat conversation so the ping shows up there
-        // alongside any actual messages, not just as a proximity-area social signal. Silently
-        // skipped if chatID isn't resolvable yet - the ping itself (above) already succeeded and
-        // shouldn't be blocked or reported as failed on account of this being unavailable.
-        const chatID = resolveChatID();
-        if (chatID) {
-            sendDirectMessage(chatID, "🔔 Pinged back").catch((error) =>
-                console.error("Failed to log ping-back in chat:", error),
-            );
-        }
         toastStore.removeToast(toastUuid);
     }
 

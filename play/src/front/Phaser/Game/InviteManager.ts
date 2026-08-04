@@ -12,7 +12,7 @@ import MeetingInvitationAcceptedToast from "../../Components/MeetingInvitation/M
 import MeetingInvitationLimitToast from "../../Components/MeetingInvitation/MeetingInvitationLimitToast.svelte";
 import PingReceivedToast from "../../Components/SocialSignal/PingReceivedToast.svelte";
 import WaveReceivedToast from "../../Components/SocialSignal/WaveReceivedToast.svelte";
-import LL from "../../../i18n/i18n-svelte";
+import { sendDirectMessage } from "../../Chat/Utils";
 
 export type SocialSignalKind = "wave" | "ping";
 
@@ -127,16 +127,17 @@ export class InviteManager {
                     // still too quiet over ambient game/call audio. Web Audio GainNode accepts
                     // values above 1.0, so this doubles the sample's amplitude in software.
                     scene.playSound(kind === "wave" ? "wave" : "ping-bell", 2.0);
-                    const text =
-                        kind === "wave"
-                            ? get(LL).chat.socialSignal.wavedToYou({ name: payload.senderName })
-                            : get(LL).chat.socialSignal.pingedYou({ name: payload.senderName });
-                    try {
-                        scene.proximityChatRoomManager
-                            .getDefaultRoom()
-                            ?.logDirectMessage(text, payload.senderName, payload.senderUserUuid);
-                    } catch (error) {
-                        console.error(`Failed to log ${kind} to chat history:`, error);
+                    // Log into the sender's real direct-message conversation (not the separate,
+                    // area-wide Proximity Chat log this used to write to) - waves/pings from a
+                    // specific person belong in that person's own conversation, not duplicated
+                    // into a second, unrelated place. Best-effort: silently skipped if chatID
+                    // isn't resolvable yet, since the toast/sound above already succeeded.
+                    const chatID = scene.getRemotePlayersRepository().getPlayerByUuid(payload.senderUserUuid)?.chatID;
+                    if (chatID) {
+                        const text = kind === "wave" ? "👋 Waved" : "🔔 Pinged";
+                        sendDirectMessage(chatID, text).catch((error) =>
+                            console.error(`Failed to log ${kind} in chat:`, error),
+                        );
                     }
                 }
             }),
@@ -224,22 +225,20 @@ export class InviteManager {
 
         this.connection.emitSocialSignalRequest(receiverUserUuid, kind, receiverUserId);
 
-        // Log the send side too (item 3: sender sees "You waved at X" / "You pinged X"), and play
-        // the same sound the receiver hears so the sender gets audible confirmation their
-        // wave/ping actually went out.
+        // Play the same sound the receiver hears so the sender gets audible confirmation their
+        // wave/ping actually went out, and log it into the real direct-message conversation with
+        // that person (not the separate, area-wide Proximity Chat log this used to write to) -
+        // covers every wave/ping trigger (hover-preview, toast wave-back, user list, woka click)
+        // from this one shared choke point, instead of each caller having to remember to do it.
         const scene = gameManager.getCurrentGameScene();
         if (scene) {
             scene.playSound(kind === "wave" ? "wave" : "ping-bell", 2.0);
-            const text =
-                kind === "wave"
-                    ? get(LL).chat.socialSignal.youWavedAt({ name: receiverUserName })
-                    : get(LL).chat.socialSignal.youPinged({ name: receiverUserName });
-            try {
-                scene.proximityChatRoomManager
-                    .getDefaultRoom()
-                    ?.logDirectMessage(text, receiverUserName, receiverUserUuid);
-            } catch (error) {
-                console.error(`Failed to log ${kind} to chat history:`, error);
+            const chatID = scene.getRemotePlayersRepository().getPlayerByUuid(receiverUserUuid)?.chatID;
+            if (chatID) {
+                const text = kind === "wave" ? "👋 Waved" : "🔔 Pinged";
+                sendDirectMessage(chatID, text).catch((error) =>
+                    console.error(`Failed to log ${kind} in chat:`, error),
+                );
             }
         }
 

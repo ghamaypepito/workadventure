@@ -2,7 +2,7 @@
     import { onDestroy, onMount } from "svelte";
     import { hoverPreviewStore } from "../../Stores/HoverPreviewStore";
     import { gameManager } from "../../Phaser/Game/GameManager";
-    import { openDirectChatRoom, sendDirectMessage } from "../../Chat/Utils";
+    import { openDirectChatRoom } from "../../Chat/Utils";
     import { getColorHexOfStatus, getStatusLabel } from "../../Utils/AvailabilityStatus";
     import { windowSize } from "../../Stores/CoWebsiteStore";
     import LL from "../../../i18n/i18n-svelte";
@@ -41,19 +41,8 @@
             waveBlocked = true;
             return;
         }
-        // Best-effort: also drop a line in the real chat conversation so the wave shows up there
-        // alongside any actual messages, not just as a proximity-area social signal. Silently
-        // skipped if chatID isn't resolvable yet - the wave itself (above) already succeeded and
-        // shouldn't be blocked or reported as failed on account of this being unavailable.
-        const chatID = gameManager
-            .getCurrentGameScene()
-            .getRemotePlayersRepository()
-            .getPlayerByUuid(data.userUuid)?.chatID;
-        if (chatID) {
-            sendDirectMessage(chatID, "👋 Waved").catch((error) =>
-                console.error("Failed to log wave in chat:", error),
-            );
-        }
+        // requestSocialSignal already logs this into the real direct-message conversation with
+        // this person (see InviteManager.ts) - no need to do it again here.
         hoverPreviewStore.set(undefined);
     }
 
