@@ -1561,20 +1561,32 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
                             console.error("Failed to joinRoom : ", e);
                             this.createAndAddNewRootRoom(room);
                         });
-                    } else if (room.getDMInviter()) {
-                        // Auto-accept 1:1 direct-message invites the same way admin invites are
-                        // auto-joined above - a DM invite is never something to screen/decline in
-                        // this app (there's no concept of an unwanted 1:1 chat request), and
-                        // leaving it pending in the "Invitations" list is exactly what caused
-                        // duplicate DM rooms: getDirectRoomFor's un-accepted-invite fix stops new
-                        // duplicates once found, but the room only becomes visible as an ordinary
-                        // DM (out of the pending list) once actually joined. Use the wrapper
-                        // joinRoom(), not the raw client call above, so addDMRoomInAccountData
-                        // still runs and the room is correctly flagged "direct" for this client too.
-                        this.joinRoom(room.roomId).catch((e) => {
-                            console.error("Failed to auto-join direct message invite : ", e);
-                            this.createAndAddNewRootRoom(room);
-                        });
+                    } else {
+                        const dmInviterId = room.getDMInviter();
+                        if (dmInviterId) {
+                            // Auto-accept 1:1 direct-message invites the same way admin invites
+                            // are auto-joined above - a DM invite is never something to
+                            // screen/decline in this app (there's no concept of an unwanted 1:1
+                            // chat request), and leaving it pending in the "Invitations" list is
+                            // exactly what caused duplicate DM rooms: getDirectRoomFor's
+                            // un-accepted-invite fix stops new duplicates once found, but the room
+                            // only becomes visible as an ordinary DM (out of the pending list) once
+                            // actually joined. Use the wrapper joinRoom(), not the raw client call
+                            // above, so addDMRoomInAccountData still runs and the room is correctly
+                            // flagged "direct" for this client too.
+                            this.joinRoom(room.roomId)
+                                .then(() =>
+                                    // This is exactly the moment a race-created duplicate becomes
+                                    // visible: if we (or dmInviterId) independently created our own
+                                    // room for each other moments apart, both now exist in our room
+                                    // list - see dedupeDirectRoomsFor.
+                                    this.dedupeDirectRoomsFor(dmInviterId),
+                                )
+                                .catch((e) => {
+                                    console.error("Failed to auto-join direct message invite : ", e);
+                                    this.createAndAddNewRootRoom(room);
+                                });
+                        }
                     }
 
                     this.detachRoomFromRootLists(room.roomId);
@@ -1830,7 +1842,14 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
 
             const room = this.client.getRoom(room_id);
             if (!room) return;
-            return this.createAndAddNewRootRoom(room);
+            const newRoom = this.createAndAddNewRootRoom(room);
+            // Defensive backstop for the narrow window between this function's own
+            // getDirectRoomFor check above and this point - see dedupeDirectRoomsFor for the
+            // actual race this guards against (the far more common case: the other side's
+            // already-existing invite arriving via sync afterward is handled where that's
+            // received, in onRoomEventMembership).
+            await this.dedupeDirectRoomsFor(userToInvite);
+            return this.getDirectRoomFor(userToInvite) ?? newRoom;
         } catch (error) {
             throw this.handleMatrixError(error);
         } finally {
@@ -1855,8 +1874,45 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
                 return memberIDs.length === 2 && memberIDs.includes(userID);
             })
             .map((room) => room);
-        if (directRooms.length > 0) return directRooms[0];
-        return undefined;
+        if (directRooms.length === 0) return undefined;
+        if (directRooms.length === 1) return directRooms[0];
+        // More than one match can genuinely happen (see dedupeDirectRoomsFor) in the moments
+        // right after a creation race, before the older duplicate has actually been left yet.
+        // Pick deterministically (lowest room ID) rather than Map iteration order, so this
+        // matches dedupeDirectRoomsFor's own choice of which room to keep - both clients agree
+        // on the same "canonical" room without needing to coordinate.
+        return directRooms.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0];
+    }
+
+    /**
+     * Self-heals a race where both sides of a DM independently created a room for each other at
+     * nearly the same time - each side's getDirectRoomFor check ran before the other's
+     * just-created invite had synced to them yet, so both created one. Rather than adding
+     * artificial delay to every single first message to prevent this (the race is rare; the delay
+     * would be paid on every brand new conversation, for everyone), let it happen and clean up
+     * once the second room becomes visible: if more than one direct room exists for this
+     * counterpart, leave every one except the deterministically "canonical" one (lowest room ID -
+     * see getDirectRoomFor), which both clients independently agree on without coordinating.
+     * History in a left room remains in that room's own timeline while still a member; it's just
+     * no longer the room used going forward.
+     */
+    private async dedupeDirectRoomsFor(userID: string): Promise<void> {
+        const directRooms = Array.from(this.roomList.values()).filter((room) => {
+            const memberIDs = get(room.members)
+                .filter((member) => member.id && ["join", "invite"].includes(get(member.membership)))
+                .map((member) => member.id);
+            return memberIDs.length === 2 && memberIDs.includes(userID);
+        });
+        if (directRooms.length <= 1) return;
+        const sorted = directRooms.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        const duplicates = sorted.slice(1);
+        for (const duplicate of duplicates) {
+            try {
+                await duplicate.leaveRoom();
+            } catch (error) {
+                console.error("Failed to leave duplicate direct room : ", error);
+            }
+        }
     }
 
     async searchChatUsers(searchText: string, limit = 20) {
