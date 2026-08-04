@@ -1830,10 +1830,15 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
                 const memberIDs = get(room.members)
                     .filter((member) => member.id && ["join", "invite"].includes(get(member.membership)))
                     .map((member) => member.id);
-                return (
-                    get(room.type) === "direct" &&
-                    memberIDs.some((memberId) => memberId === userID && memberIDs.length === 2)
-                );
+                // A room's type only becomes "direct" once addDMRoomInAccountData has run on this
+                // client - for a self-created room that happens immediately, but for a room we
+                // were invited to, only once we've actually called joinRoom() (i.e. accepted the
+                // invite in the UI). Until then, sending/opening a chat with that same person
+                // wouldn't find this room here and would create a second, duplicate one instead.
+                // A pending invite is still a real, usable room for our purposes, so match on
+                // membership shape (exactly the two of us) rather than requiring the "direct" flag
+                // to have already synced.
+                return memberIDs.length === 2 && memberIDs.includes(userID);
             })
             .map((room) => room);
         if (directRooms.length > 0) return directRooms[0];
