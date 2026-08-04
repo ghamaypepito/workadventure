@@ -1,8 +1,17 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 import { SKIP_RENDER_OPTIMIZATIONS } from "../../Enum/EnvironmentVariable";
 import { ResizableScene } from "../Login/ResizableScene";
+import { chatVisibilityStore } from "../../Stores/ChatStore";
 
 const Events = Phaser.Core.Events;
+
+// While the chat panel is open, the user's attention (and the main thread) is on the chat UI,
+// not the game canvas - throttling the (otherwise continuous, up-to-60fps) WebGL render pass to
+// roughly this often instead frees up meaningful CPU time for the chat panel to open/update
+// smoothly, without touching scene.update() below (game logic - player positions, etc. - still
+// runs every frame at full rate, so nothing becomes stale or desyncs; only how often that state
+// gets visually redrawn to the canvas is reduced).
+const CHAT_OPEN_RENDER_THROTTLE_MS = 100;
 
 /**
  * A specialization of the main Phaser Game scene.
@@ -14,6 +23,8 @@ const Events = Phaser.Core.Events;
  */
 export class Game extends Phaser.Game {
     private _isDirty = false;
+    private isChatVisible = false;
+    private lastRenderTime = 0;
 
     constructor(GameConfig: Phaser.Types.Core.GameConfig) {
         super(GameConfig);
@@ -24,6 +35,10 @@ export class Game extends Phaser.Game {
                     scene.onResize();
                 }
             }
+        });
+
+        chatVisibilityStore.subscribe((visible) => {
+            this.isChatVisible = visible;
         });
     }
 
@@ -52,8 +67,18 @@ export class Game extends Phaser.Game {
 
         eventEmitter.emit(Events.POST_STEP, time, delta);
 
+        // Skip the (expensive) render pass if we're deliberately throttling it while the chat
+        // panel is open (see CHAT_OPEN_RENDER_THROTTLE_MS above) - scene.update() already ran
+        // above regardless, so game state itself stays fully live either way.
+        if (this.isChatVisible && time - this.lastRenderTime < CHAT_OPEN_RENDER_THROTTLE_MS) {
+            // @ts-ignore
+            this.scene.isProcessing = false;
+            return;
+        }
+
         // This "if" is the changed introduced by the new "Game" class to avoid rendering unnecessarily.
         if (SKIP_RENDER_OPTIMIZATIONS || this.isDirty()) {
+            this.lastRenderTime = time;
             const renderer = this.renderer;
 
             //  Run the Pre-render (clearing the canvas, setting background colors, etc)
