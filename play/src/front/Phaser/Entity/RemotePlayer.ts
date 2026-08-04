@@ -389,6 +389,7 @@ export class RemotePlayer extends Character implements ActivatableInterface {
                     userUuid: this.userUuid,
                     name: this.playerName,
                     availabilityStatus: player?.availabilityStatus ?? AvailabilityStatus.UNCHANGED,
+                    customStatusMessage: player?.customStatusMessage,
                     screenX,
                     screenY,
                 });

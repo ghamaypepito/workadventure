@@ -428,6 +428,7 @@ export class SocketManager {
             characterTextures: user.characterTextures,
             position: ProtobufUtils.toPositionMessage(user.getPosition()),
             chatID: user.chatID,
+            customStatusMessage: user.customStatusMessage,
         };
         if (fromZone) {
             userJoinedZoneMessage.fromZone = SocketManager.toProtoZone(fromZone);

@@ -444,7 +444,13 @@ export const availabilityStatusStore = derived(
         if ($inLivekitStore) return AvailabilityStatus.LIVEKIT;
         if ($isListenerStore) return AvailabilityStatus.LISTENER;
         if ($requestedStatusStore) return $requestedStatusStore;
-        if ($privacyShutdownStore) return AvailabilityStatus.AWAY;
+        // Deliberately NOT falling back to AWAY when privacyShutdownStore is true (tab lost focus,
+        // no active call): that made the status dot flip to Away just from switching tabs to do
+        // other work, even though the user never asked to look away. privacyShutdownStore still
+        // gates the actual camera/mic privacy shutdown elsewhere in this file - only its effect on
+        // the visible status is removed here. Status now only changes when the user picks one
+        // themselves (requestedStatusStore above) or an actual state change warrants it (in a
+        // call, silent, etc., all checked above).
 
         return AvailabilityStatus.ONLINE;
     },

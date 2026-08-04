@@ -29,6 +29,7 @@ export interface MessageUserJoined {
     variables: Map<string, unknown>;
     chatID?: string;
     sayMessage?: SayMessage;
+    customStatusMessage?: string;
     activate?: () => void;
 }
 

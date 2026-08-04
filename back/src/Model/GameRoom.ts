@@ -330,6 +330,7 @@ export class GameRoom implements BrothersFinder {
             joinRoomMessage.chatID,
             undefined,
             tabId,
+            undefined,
         );
 
         this.users.set(user.id, user);

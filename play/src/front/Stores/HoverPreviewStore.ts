@@ -6,6 +6,7 @@ export interface HoverPreviewData {
     userUuid: string;
     name: string;
     availabilityStatus: AvailabilityStatus;
+    customStatusMessage?: string;
     screenX: number;
     screenY: number;
 }

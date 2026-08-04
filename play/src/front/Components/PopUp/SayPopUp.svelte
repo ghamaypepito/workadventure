@@ -41,7 +41,6 @@
                 break;
             }
             case AvailabilityStatus.SILENT:
-            case AvailabilityStatus.AWAY:
             case AvailabilityStatus.DO_NOT_DISTURB:
             case AvailabilityStatus.BACK_IN_A_MOMENT:
             case AvailabilityStatus.BUSY: {

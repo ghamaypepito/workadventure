@@ -69,7 +69,7 @@
         class:bg-slate-300={theme === "light"}
     ></div>
     <div
-        class="flex flex-col backdrop-blur-md min-w-60 min-h-12 rounded-lg overflow-hidden transition-all responsive z-20 {extraClasses} {theme !== 'light' ? 'bg-contrast/50 text-white' : 'bg-white/95 text-slate-900'}"
+        class="flex flex-col backdrop-blur-md min-w-60 max-w-72 min-h-12 rounded-lg overflow-hidden transition-all responsive z-20 {extraClasses} {theme !== 'light' ? 'bg-contrast/50 text-white' : 'bg-white/95 text-slate-900'}"
         transition:fly={{ x: 900, duration: 500 }}
     >
         <!-- Progress bar -->
@@ -94,9 +94,10 @@
             </div>
         </div>
         {#if buttons}
-            <div
-                class="buttons-wrapper flex items-center justify-center p-2 space-x-2 bg-contrast/60 pointer-events-auto"
-            >
+            <!-- grid, not a single flex row: with 3+ actions (wave/ping toasts) a flex row just
+             kept growing wider to fit everything on one line, which is what made these toasts so
+             wide. Two columns keeps the toast itself narrow regardless of how many actions it has. -->
+            <div class="buttons-wrapper grid grid-cols-2 gap-1.5 p-2 bg-contrast/60 pointer-events-auto">
                 {@render buttons()}
             </div>
         {/if}

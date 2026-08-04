@@ -913,6 +913,13 @@ export class RoomConnection implements RoomConnection {
         this.sendPlayerDetailsMessage(message);
     }
 
+    public emitPlayerCustomStatusMessage(customStatusMessage: string): void {
+        const message = SetPlayerDetailsMessageTsProto.fromPartial({
+            customStatusMessage,
+        });
+        this.sendPlayerDetailsMessage(message);
+    }
+
     public emitPlayerOutlineColor(color: number | null) {
         let message: SetPlayerDetailsMessageTsProto;
         if (color === null) {
@@ -2109,6 +2116,7 @@ export class RoomConnection implements RoomConnection {
             variables: variables,
             chatID: message.chatID,
             sayMessage: message.sayMessage,
+            customStatusMessage: message.customStatusMessage,
         };
     }
 

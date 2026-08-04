@@ -113,6 +113,7 @@ message SetPlayerDetailsMessage {
   SetPlayerVariableMessage setVariable = 7;
   google.protobuf.StringValue chatID = 8;
   SayMessage sayMessage = 9;
+  google.protobuf.StringValue customStatusMessage = 10;
 }
 
 message SayMessage {
@@ -979,6 +980,7 @@ message UserJoinedMessage {
   map<string, string> variables = 12;
   optional string chatID = 13;
   SayMessage sayMessage = 14;
+  optional string customStatusMessage = 15;
 }
 
 message UserLeftMessage {
@@ -1452,6 +1454,7 @@ message UserJoinedZoneMessage {
   map<string, string> variables = 13;
   optional string chatID = 14;
   SayMessage sayMessage = 15;
+  optional string customStatusMessage = 16;
 }
 
 message UserLeftZoneMessage {

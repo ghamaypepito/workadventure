@@ -1,5 +1,7 @@
 <script lang="ts">
     import { onDestroy, onMount } from "svelte";
+    import * as Sentry from "@sentry/svelte";
+    import { AskPositionMessage_AskType } from "@workadventure/messages";
     import { hoverPreviewStore } from "../../Stores/HoverPreviewStore";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { openDirectChatRoom } from "../../Chat/Utils";
@@ -16,8 +18,8 @@
     const VIEWPORT_MARGIN_PX = 8;
     // Fallback estimates used only for the very first paint, before the card's real size has been
     // measured via bind:offsetWidth/offsetHeight below.
-    const CARD_WIDTH_ESTIMATE_PX = 180;
-    const CARD_HEIGHT_ESTIMATE_PX = 110;
+    const CARD_WIDTH_ESTIMATE_PX = 176;
+    const CARD_HEIGHT_ESTIMATE_PX = 150;
 
     let cardWidth = $state(0);
     let cardHeight = $state(0);
@@ -61,6 +63,35 @@
             return;
         }
         openDirectChatRoom(chatID).catch((error) => console.error("Failed to open direct chat room:", error));
+        hoverPreviewStore.set(undefined);
+    }
+
+    // Same action as the "Follow" entry in the online-user-list dropdown (UserActionButton.svelte's
+    // locateUser): asks the server to bring this player's woka into view/focus. Reuses the existing
+    // AskPositionMessage/LOCATE mechanism rather than introducing a new one.
+    function follow() {
+        const data = $hoverPreviewStore;
+        if (!data) return;
+        const scene = gameManager.getCurrentGameScene();
+        scene.connection?.emitAskPosition(data.userUuid, scene.roomUrl, AskPositionMessage_AskType.LOCATE);
+        hoverPreviewStore.set(undefined);
+    }
+
+    // Reuses the existing meeting-invitation mechanism (same as UserActionButton.svelte's
+    // "Invite") - sends this player a request to come join wherever the sender currently is.
+    function joinMeAtMyDesk() {
+        const data = $hoverPreviewStore;
+        if (!data) return;
+        const scene = gameManager.getCurrentGameScene();
+        const sent = scene.inviteManager?.requestMeetingInvitation(data.userUuid, data.userId);
+        if (sent) {
+            try {
+                scene.playMeetingInviteSound();
+            } catch (error) {
+                console.error("Failed to play sound: ", error);
+                Sentry.captureException(error);
+            }
+        }
         hoverPreviewStore.set(undefined);
     }
 
@@ -149,7 +180,7 @@
         bind:this={cardEl}
         bind:offsetWidth={cardWidth}
         bind:offsetHeight={cardHeight}
-        class="fixed z-[1050] -translate-x-1/2 -translate-y-full bg-contrast/90 backdrop-blur rounded-lg p-2 pointer-events-auto flex flex-col gap-1 min-w-40"
+        class="fixed z-[1050] -translate-x-1/2 -translate-y-full bg-contrast/90 backdrop-blur rounded-lg p-2 pointer-events-auto flex flex-col gap-1 w-44"
         style="left: {clampedLeft}px; top: {clampedTop}px"
         data-testid="person-hover-preview"
     >
@@ -163,13 +194,22 @@
         <div class="text-xxs opacity-70" style="color: {getColorHexOfStatus(data.availabilityStatus)}">
             {getStatusLabel(data.availabilityStatus)}
         </div>
-        <div class="flex gap-1 mt-1">
-            <button type="button" class="btn btn-light btn-ghost text-xs flex-1" onclick={wave}
+        {#if data.customStatusMessage}
+            <div class="text-xxs text-white/80 italic truncate">{data.customStatusMessage}</div>
+        {/if}
+        <div class="grid grid-cols-2 gap-1 mt-1">
+            <button type="button" class="btn btn-light btn-ghost text-xs w-full" onclick={wave}
                 >👋 {$LL.chat.socialSignal.wave()}</button
             >
-            <button type="button" class="btn btn-light btn-ghost text-xs flex-1" onclick={message}
+            <button type="button" class="btn btn-light btn-ghost text-xs w-full" onclick={message}
                 >{$LL.chat.userList.sendMessage()}</button
             >
+            <button type="button" class="btn btn-light btn-ghost text-xs w-full" onclick={follow}>
+                {$LL.chat.userList.follow()}
+            </button>
+            <button type="button" class="btn btn-light btn-ghost text-xs w-full" onclick={joinMeAtMyDesk}>
+                Join my desk
+            </button>
         </div>
         {#if messageUnavailable}
             <div class="text-xxs opacity-70 text-center">Can't message - unavailable</div>

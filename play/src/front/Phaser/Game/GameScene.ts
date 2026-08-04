@@ -1049,6 +1049,22 @@ export class GameScene extends DirtyScene {
                 Sentry.captureException(e);
             });
 
+        // Broadcast our custom status message (if one was already set before this session, e.g.
+        // from a previous visit) once, right after joining - so it's visible to whoever's already
+        // in the room too, not just people who join after we later change it via
+        // customStatusMessageStore (see CustomStatusMessageStore.ts, which emits live updates).
+        this.roomJoinedPromiseDeferred.promise
+            .then(() => {
+                const customStatusMessage = localUserStore.getCustomStatusMessage();
+                if (customStatusMessage) {
+                    this.connection?.emitPlayerCustomStatusMessage(customStatusMessage);
+                }
+            })
+            .catch((e) => {
+                console.error(e);
+                Sentry.captureException(e);
+            });
+
         if (this.game.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) {
             this._focusFx = new DarkenOutsideAreaEffect(this, this.cameras.main, {
                 feather: 10,

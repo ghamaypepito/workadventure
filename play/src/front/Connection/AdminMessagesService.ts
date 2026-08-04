@@ -23,7 +23,7 @@ class AdminMessagesService {
 
     onSendusermessage(message: SendUserMessage | BanUserMessage) {
         this._messageStream.next({
-            type: message.type,
+            type: message.type as unknown as AdminMessageEventTypes,
             text: message.message,
         });
     }

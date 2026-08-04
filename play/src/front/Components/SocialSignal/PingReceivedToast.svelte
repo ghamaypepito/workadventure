@@ -20,12 +20,30 @@
     // letting the toast close with nothing visibly having happened (same failure-visibility
     // fix already applied to the quick-reply's "failed" state below).
     let messageUnavailable = $state(false);
+    // Set when "Walk to desk" is clicked but the sender's live position couldn't be resolved (e.g.
+    // they've since left the room) - same failure-visibility pattern as messageUnavailable.
+    let walkUnavailable = $state(false);
 
     function resolveChatID(): string | undefined {
         return gameManager
             .getCurrentGameScene()
             .getRemotePlayersRepository()
             .getPlayerByUuid(senderUserUuid)?.chatID;
+    }
+
+    function walkToDesk() {
+        const scene = gameManager.getCurrentGameScene();
+        const player = scene.getRemotePlayersRepository().getPlayerByUuid(senderUserUuid);
+        if (!player) {
+            // Position is only known while the sender is loaded in this room's repository - if
+            // they've left since sending the ping, there's nowhere to walk to.
+            walkUnavailable = true;
+            return;
+        }
+        scene
+            .moveTo({ x: player.position.x, y: player.position.y }, true)
+            .catch((error) => console.error("Failed to walk to sender's position:", error));
+        toastStore.removeToast(toastUuid);
     }
 
     function pingBack() {
@@ -76,32 +94,40 @@
 <ToastContainer theme="light" extraClasses="" {toastUuid} {receivedAt}>
     🔔 {$LL.chat.socialSignal.wantsToTalk({ name: actorName })}
     {#snippet buttons()}
-        <button type="button" class="btn btn-light btn-ghost text-sm" onclick={pingBack}> 🔔 Ping back </button>
-        <button type="button" class="btn btn-light btn-ghost text-sm" onclick={message}> Message </button>
-        {#if messageUnavailable}
-            <span class="text-sm opacity-70">Can't message - unavailable</span>
-        {/if}
+        <button type="button" class="btn btn-light btn-ghost text-sm w-full" onclick={pingBack}>
+            🔔 Ping back
+        </button>
+        <button type="button" class="btn btn-light btn-ghost text-sm w-full" onclick={message}> Message </button>
+        <button type="button" class="btn btn-light btn-ghost text-sm w-full" onclick={walkToDesk}>
+            🚶 Walk to desk
+        </button>
         {#if quickReplyState === "sent"}
-            <span class="text-sm opacity-70">Sent ✓</span>
+            <span class="text-sm opacity-70 flex items-center justify-center">Sent ✓</span>
         {:else}
             <button
                 type="button"
-                class="btn btn-light btn-ghost text-sm"
+                class="btn btn-light btn-ghost text-sm w-full"
                 onclick={sendWillBeThere}
                 disabled={quickReplyState === "sending"}
             >
-                Will be there in a while
+                Be there soon
             </button>
-            {#if quickReplyState === "failed"}
-                <span class="text-sm opacity-70">Failed to send</span>
-            {/if}
         {/if}
         <button
             type="button"
-            class="btn btn-light btn-ghost text-sm"
+            class="btn btn-light btn-ghost text-sm w-full col-span-2"
             onclick={() => toastStore.removeToast(toastUuid)}
         >
             {$LL.chat.socialSignal.dismiss()}
         </button>
+        {#if messageUnavailable}
+            <span class="text-xs opacity-70 col-span-2 text-center">Can't message - unavailable</span>
+        {/if}
+        {#if walkUnavailable}
+            <span class="text-xs opacity-70 col-span-2 text-center">Can't walk there - unavailable</span>
+        {/if}
+        {#if quickReplyState === "failed"}
+            <span class="text-xs opacity-70 col-span-2 text-center">Failed to send</span>
+        {/if}
     {/snippet}
 </ToastContainer>

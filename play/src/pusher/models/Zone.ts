@@ -48,6 +48,7 @@ export class UserDescriptor {
         private outlineColor?: number,
         private chatID?: string,
         private sayMessage?: SayMessage,
+        private customStatusMessage?: string,
     ) {
         if (!Number.isInteger(this.userId)) {
             throw new Error("UserDescriptor.userId is not an integer: " + this.userId);
@@ -72,6 +73,7 @@ export class UserDescriptor {
             message.hasOutline ? message.outlineColor : undefined,
             message.chatID,
             message.sayMessage,
+            message.customStatusMessage,
         );
     }
 
@@ -111,6 +113,9 @@ export class UserDescriptor {
         if (playerDetails.chatID !== undefined) {
             this.chatID = playerDetails.chatID;
         }
+        if (playerDetails.customStatusMessage !== undefined) {
+            this.customStatusMessage = playerDetails.customStatusMessage;
+        }
     }
 
     public toUserJoinedMessage(): UserJoinedMessage {
@@ -128,6 +133,7 @@ export class UserDescriptor {
             variables: this.variables,
             chatID: this.chatID,
             sayMessage: this.sayMessage,
+            customStatusMessage: this.customStatusMessage,
         };
         return userJoinedMessage;
     }
