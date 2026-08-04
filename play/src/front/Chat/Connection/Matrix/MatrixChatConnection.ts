@@ -1499,21 +1499,13 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         // side's invite lands, so that check sees only one room and (correctly, for what it can
         // see) does nothing.
         //
-        // Read members off the raw SDK `room`, NOT `newRoom.members` - that store starts out empty
-        // ([]) and is only populated later by an async initialization promise, so reading it here,
-        // synchronously right after construction, always saw zero members and silently skipped
-        // this check every single time. `room.getMembers()` reflects the SDK's already-loaded local
-        // state immediately, the same source MatrixChatRoom itself uses for its own direct-room-type
-        // heuristics (see getMembersForRoomTypeHeuristics).
+        // Uses newRoom.getMemberIdsSync(), NOT the `members` store (get(newRoom.members)) - that
+        // store starts out empty and only populates once the room has actually been opened in the
+        // UI, so reading it here, synchronously right after construction, always saw zero members
+        // and silently skipped this check every single time.
         const myUserId = this.client?.getUserId();
         if (myUserId) {
-            const memberIDs = room
-                .getMembers()
-                .filter(
-                    (member) =>
-                        member.membership === KnownMembership.Join || member.membership === KnownMembership.Invite,
-                )
-                .map((member) => member.userId);
+            const memberIDs = newRoom.getMemberIdsSync();
             if (memberIDs.length === 2) {
                 const counterpart = memberIDs.find((id) => id !== myUserId);
                 if (counterpart) {
@@ -1897,9 +1889,12 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
     getDirectRoomFor(userID: string): (ChatRoom & ChatRoomMembershipManagement) | undefined {
         const directRooms = Array.from(this.roomList.values())
             .filter((room) => {
-                const memberIDs = get(room.members)
-                    .filter((member) => member.id && ["join", "invite"].includes(get(member.membership)))
-                    .map((member) => member.id);
+                // getMemberIdsSync(), NOT get(room.members) - that store stays empty until the
+                // user has actually opened this specific room in the UI (ensureMembersInitialized
+                // is lazy), so a duplicate/older room they haven't clicked into yet would look
+                // memberless here and get skipped, causing this check to create ANOTHER new room
+                // even though a real one already exists. See getMemberIdsSync's doc comment.
+                const memberIDs = room.getMemberIdsSync();
                 // A room's type only becomes "direct" once addDMRoomInAccountData has run on this
                 // client - for a self-created room that happens immediately, but for a room we
                 // were invited to, only once we've actually called joinRoom() (i.e. accepted the
@@ -1934,10 +1929,11 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
      * no longer the room used going forward.
      */
     private async dedupeDirectRoomsFor(userID: string): Promise<void> {
+        // getMemberIdsSync(), not get(room.members) - see getDirectRoomFor's comment on the same
+        // pattern: the store is empty for any room the user hasn't opened yet, which is exactly
+        // the duplicate this function exists to catch.
         const directRooms = Array.from(this.roomList.values()).filter((room) => {
-            const memberIDs = get(room.members)
-                .filter((member) => member.id && ["join", "invite"].includes(get(member.membership)))
-                .map((member) => member.id);
+            const memberIDs = room.getMemberIdsSync();
             return memberIDs.length === 2 && memberIDs.includes(userID);
         });
         if (directRooms.length <= 1) return;
