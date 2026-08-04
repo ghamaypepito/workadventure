@@ -105,7 +105,11 @@ export class InviteManager {
             this.connection.socialSignalReceivedStream.subscribe((payload) => {
                 if (payload.kind !== "wave" && payload.kind !== "ping") return;
                 const kind = payload.kind === "wave" ? "wave" : "ping";
-                const toastId = `social-signal-${kind}-${Date.now()}`;
+                // Keyed by sender (not Date.now()) so a second wave/ping from someone whose toast
+                // is still showing updates that same toast (fresh timestamp, reset quick-reply
+                // state) instead of stacking a new one - toastStore.addToast uses this id as a Map
+                // key, so reusing it replaces the entry in place.
+                const toastId = `social-signal-${kind}-${payload.senderUserUuid}`;
                 toastStore.addToast(
                     kind === "wave" ? WaveReceivedToast : PingReceivedToast,
                     {
