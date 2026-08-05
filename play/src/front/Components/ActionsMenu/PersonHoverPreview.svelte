@@ -18,8 +18,8 @@
     const VIEWPORT_MARGIN_PX = 8;
     // Fallback estimates used only for the very first paint, before the card's real size has been
     // measured via bind:offsetWidth/offsetHeight below.
-    const CARD_WIDTH_ESTIMATE_PX = 176;
-    const CARD_HEIGHT_ESTIMATE_PX = 150;
+    const CARD_WIDTH_ESTIMATE_PX = 240;
+    const CARD_HEIGHT_ESTIMATE_PX = 190;
 
     let cardWidth = $state(0);
     let cardHeight = $state(0);
@@ -188,45 +188,61 @@
         bind:this={cardEl}
         bind:offsetWidth={cardWidth}
         bind:offsetHeight={cardHeight}
-        class="fixed z-[1050] -translate-x-1/2 -translate-y-full bg-contrast/90 backdrop-blur rounded-lg p-2 pointer-events-auto flex flex-col gap-1 w-44"
+        class="fixed z-[1050] -translate-x-1/2 -translate-y-full bg-contrast/90 backdrop-blur rounded-xl shadow-2xl p-3 pointer-events-auto flex flex-col gap-1.5 w-60"
         style="left: {clampedLeft}px; top: {clampedTop}px"
         data-testid="person-hover-preview"
     >
-        <div class="text-white text-sm font-bold flex items-center gap-1.5">
+        <div class="text-white text-sm font-bold flex items-center gap-2">
             <span
-                class="inline-block aspect-square h-2 w-2 rounded-full"
+                class="inline-block aspect-square h-2.5 w-2.5 rounded-full shrink-0"
                 style="background-color: {getColorHexOfStatus(data.availabilityStatus)}"
             ></span>
-            {data.name}
+            <span class="truncate">{data.name}</span>
         </div>
-        <div class="text-xxs opacity-70" style="color: {getColorHexOfStatus(data.availabilityStatus)}">
+        <div class="text-xs" style="color: {getColorHexOfStatus(data.availabilityStatus)}">
             {getStatusLabel(data.availabilityStatus)}
         </div>
         {#if data.customStatusMessage}
-            <div class="text-xxs text-white/80 italic truncate">{data.customStatusMessage}</div>
+            <div class="text-xs text-white/80 italic truncate">{data.customStatusMessage}</div>
         {/if}
-        <div class="grid grid-cols-2 gap-1 mt-1">
-            <button type="button" class="btn btn-light btn-ghost text-xs w-full" onclick={wave}
-                >👋 {$LL.chat.socialSignal.wave()}</button
-            >
-            <button type="button" class="btn btn-light btn-ghost text-xs w-full" onclick={message}
-                >{$LL.chat.userList.sendMessage()}</button
-            >
-            <button type="button" class="btn btn-light btn-ghost text-xs w-full" onclick={follow}>
-                {$LL.chat.userList.follow()}
+        <div class="border-t border-white/10 my-1"></div>
+        <div class="grid grid-cols-2 gap-2">
+            <button type="button" class="btn btn-light btn-ghost justify-center w-full rounded-lg py-2 px-2" onclick={wave}>
+                <span class="flex items-center gap-1.5 text-sm">
+                    <span>👋</span>
+                    <span class="truncate">{$LL.chat.socialSignal.wave()}</span>
+                </span>
             </button>
-            <button type="button" class="btn btn-light btn-ghost text-xs w-full" onclick={joinMeAtMyDesk}>
-                Join my desk
+            <button
+                type="button"
+                class="btn btn-light btn-ghost justify-center w-full rounded-lg py-2 px-2"
+                onclick={message}
+            >
+                <span class="truncate text-sm">{$LL.chat.userList.sendMessage()}</span>
+            </button>
+            <button
+                type="button"
+                class="btn btn-light btn-ghost justify-center w-full rounded-lg py-2 px-2"
+                onclick={follow}
+            >
+                <span class="truncate text-sm">{$LL.chat.userList.follow()}</span>
+            </button>
+            <button
+                type="button"
+                class="btn btn-light btn-ghost justify-center w-full rounded-lg py-2 px-2"
+                onclick={joinMeAtMyDesk}
+            >
+                <span class="truncate text-sm">Join my desk</span>
             </button>
         </div>
         {#if messageUnavailable}
-            <div class="text-xxs opacity-70 text-center">Can't message - unavailable</div>
+            <div class="text-xs opacity-70 text-center">Can't message - unavailable</div>
         {/if}
         {#if waveBlocked}
-            <div class="text-xxs opacity-70 text-center">Too many waves - try again later</div>
+            <div class="text-xs opacity-70 text-center">Too many waves - try again later</div>
         {/if}
         {#if joinDeskBlocked}
-            <div class="text-xxs opacity-70 text-center">Too many invites to this person - try again later</div>
+            <div class="text-xs opacity-70 text-center">Too many invites to this person - try again later</div>
         {/if}
     </div>
 {/if}
