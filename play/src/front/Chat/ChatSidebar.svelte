@@ -1,8 +1,10 @@
 <script lang="ts">
+    import { onDestroy, onMount } from "svelte";
     import { fly } from "svelte/transition";
     import { chatVisibilityStore, INITIAL_SIDEBAR_WIDTH, INITIAL_SIDEBAR_WIDTH_MOBILE } from "../Stores/ChatStore";
     import { isMediaBreakpointUp } from "../Utils/BreakpointsUtils";
     import { blocker } from "../Utils/screenBlocker";
+    import { gameManager } from "../Phaser/Game/GameManager";
     import { selectedRoomStore } from "./Stores/SelectRoomStore";
     import Chat from "./Components/Chat.svelte";
     import { chatSidebarWidthStore, hideActionBarStoreBecauseOfChatBar } from "./ChatSidebarWidthStore";
@@ -13,6 +15,31 @@
     function closeChat() {
         chatVisibilityStore.set(false);
     }
+
+    function onKeyDown(e: KeyboardEvent) {
+        if (e.key === "Escape" && $chatVisibilityStore) {
+            closeChat();
+        }
+    }
+
+    // Clicking the game world (the map/canvas behind the sidebar) closes the chat, same as
+    // clicking outside any other popup in this app - only wired up while the chat is actually
+    // open, so it doesn't eat clicks meant for the game the rest of the time.
+    let canvasEl: HTMLCanvasElement | undefined;
+    function onCanvasPointerDown() {
+        if ($chatVisibilityStore) {
+            closeChat();
+        }
+    }
+
+    onMount(() => {
+        canvasEl = gameManager.getCurrentGameScene().game.canvas;
+        canvasEl.addEventListener("pointerdown", onCanvasPointerDown);
+    });
+
+    onDestroy(() => {
+        canvasEl?.removeEventListener("pointerdown", onCanvasPointerDown);
+    });
 
     let isInSpecificDiscussion = $derived($selectedRoomStore !== undefined);
 
@@ -97,7 +124,7 @@
     };
 </script>
 
-<svelte:window {onresize} />
+<svelte:window {onresize} onkeydown={onKeyDown} />
 {#if $chatVisibilityStore}
     <section
         bind:this={container}
