@@ -68,9 +68,17 @@ oidc_providers:
     user_profile_method: "userinfo_endpoint"
     user_mapping_provider:
       config:
-        localpart_template: "{{ user.email.split('@')[0] }}"
+        # Unlike Google, Azure AD/Microsoft accounts frequently don't return an `email` claim at
+        # all (work/school accounts without a licensed mailbox, guest/B2B accounts, etc. - a
+        # documented Microsoft identity-platform quirk, not a misconfiguration). Falling back to
+        # `preferred_username` (Microsoft's UPN, e.g. user@tenant.com, always present) here mirrors
+        # the same fallback the Vercel-side login callback already uses
+        # (api/auth/microsoft-callback.js) for exactly this reason - without it, any Microsoft user
+        # whose tenant omits `email` fails this Jinja template outright and never gets a Matrix
+        # account, so chat/"Send Message" is silently unavailable for them specifically.
+        localpart_template: "{{ (user.email or user.preferred_username).split('@')[0] }}"
         display_name_template: "{{ user.name }}"
-        email_template: "{{ user.email }}"
+        email_template: "{{ user.email or user.preferred_username }}"
 
 sso:
   client_whitelist:
