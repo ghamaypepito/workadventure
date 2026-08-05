@@ -6,7 +6,15 @@
   display: flex;
   transform: translateX(-100%);
   position: fixed;
-  z-index: 820;
+  /* Fixed + z-index creates its own stacking context, so .chatWindow's z-index: 2000 further down
+     this file is capped relative to siblings OUTSIDE #chat-aside - it can never outrank another
+     stacking context that itself sits above 820, no matter how high its own inner z-index goes.
+     The bottom ActionBar (MainLayout.svelte) is exactly such a sibling at z-[1000] with its own
+     fixed+z-index context, so its Users-button hover tooltip was painting on top of the entire
+     chat/user-list panel and eating clicks meant for the rows underneath. Raised above that (and
+     every other persistent-chrome element at z-[900]/z-[1000]) while staying below the
+     hover-preview/toast/editor/modal overlays (z-[1050] and up) that should still win over chat. */
+  z-index: 1010;
   transition: transform 0.5s;
   background-color: rgba(10, 9, 9, 0.8);
 }
