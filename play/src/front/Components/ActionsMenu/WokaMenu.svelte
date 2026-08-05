@@ -35,10 +35,7 @@
     }
 
     // Grid, not row/wrap: a flex row just kept growing wider to fit every action on one line,
-    // which is what made this popup so wide. 2 columns for a handful of actions, 3 once there are
-    // enough to make 2 columns feel cramped/tall.
-    let gridColumns: 2 | 3 = $state(2);
-
+    // which is what made this popup so wide. Always 2 columns.
     wokaMenuStoreUnsubscriber = wokaMenuStore.subscribe((value) => {
         wokaMenuData = value;
         if (wokaMenuData) {
@@ -59,8 +56,6 @@
                     return 0;
                 }
             });
-            const nbButtons = sortedActions.length + (wokaMenuData.wokaName ? 0 : 1) + (remotePlayer?.chatID ? 1 : 0);
-            gridColumns = nbButtons > 4 ? 3 : 2;
         }
     });
 
@@ -84,7 +79,7 @@
 
 {#if wokaMenuData}
     <div
-        class="m-auto my-0 h-fit min-h-fit w-64 max-sm:max-w-[89%] z-50 bg-contrast/80 transition-all backdrop-blur rounded-lg pointer-events-auto overflow-hidden md:mr-0"
+        class="m-auto my-0 h-fit min-h-fit w-80 max-sm:max-w-[89%] z-50 bg-contrast/80 transition-all backdrop-blur rounded-xl shadow-2xl pointer-events-auto overflow-hidden md:mr-0"
         data-testid="actions-menu"
         use:tapOutside={closeActionsMenu}
     >
@@ -157,17 +152,14 @@
         </div>
 
         {#if sortedActions}
-            <div
-                class="grid gap-1.5 p-2 bg-contrast w-full"
-                class:margin-close={!wokaMenuData.wokaName}
-                class:grid-cols-2={gridColumns === 2}
-                class:grid-cols-3={gridColumns === 3}
-            >
+            <div class="border-t border-white/10 mx-3"></div>
+            <div class="grid grid-cols-2 gap-2 p-3 bg-contrast w-full" class:margin-close={!wokaMenuData.wokaName}>
                 {#each sortedActions ?? [] as action (action.uuid)}
                     <button
                         type="button"
                         data-testid={action.testId}
-                        class="btn btn-light btn-ghost text-nowrap justify-center w-full min-w-0 {action.style ?? ''}"
+                        class="btn btn-light btn-ghost justify-center w-full min-w-0 rounded-lg py-2.5 px-2 transition-colors {action.style ??
+                            ''}"
                         onclick={(event) => {
                             analyticsClient.clickPropertyMapEditor(action.actionName, action.style);
                             event.preventDefault();
@@ -175,16 +167,16 @@
                             action.callback();
                         }}
                     >
-                        <span class="flex flex-row gap-1 items-center justify-center">
+                        <span class="flex flex-row gap-1.5 items-center justify-center w-full">
                             {#if action.actionIcon && typeof action.actionIcon === "string"}
-                                <div class="w-6 h-6">
+                                <div class="w-5 h-5 shrink-0">
                                     <img src={action.actionIcon} class="w-full h-full" alt="" />
                                 </div>
                             {:else if action.actionIcon && typeof action.actionIcon === "function"}
                                 {@const ActionIcon = action.actionIcon}
-                                <ActionIcon class="w-6 h-6" />
+                                <ActionIcon class="w-5 h-5 shrink-0" />
                             {/if}
-                            {action.actionName}
+                            <span class="truncate text-sm">{action.actionName}</span>
                         </span>
                     </button>
                 {/each}
@@ -192,14 +184,14 @@
                 {#if !wokaMenuData.wokaName}
                     <button
                         type="button"
-                        class="btn btn-light btn-ghost text-nowrap justify-center w-full"
+                        class="btn btn-light btn-ghost justify-center w-full rounded-lg py-2.5 px-2 col-span-2"
                         onclick={(event) => {
                             event.preventDefault();
                             event.stopPropagation();
                             closeActionsMenu();
                         }}
                     >
-                        {$LL.actionbar.close()}
+                        <span class="text-sm">{$LL.actionbar.close()}</span>
                     </button>
                 {/if}
             </div>
