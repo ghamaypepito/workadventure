@@ -282,6 +282,20 @@ export class GameRoom implements BrothersFinder {
         // Check if there's a stale connection from the same browser tab and kill it immediately
         // This prevents "ghost" users appearing when a user reconnects after a network disruption
         const tabId = joinRoomMessage.tabId;
+        // TEMP DIAGNOSTIC (investigating proximity/WebRTC audio outage reported 2026-08-06): logs
+        // every join's tabId and whatever this UUID already has registered, to find out whether
+        // legitimate single-tab sessions are being misclassified as duplicates and kicked in a
+        // loop. Remove once the cause is confirmed.
+        console.info(
+            `[session-diag] join uuid=${joinRoomMessage.userUuid} tabId=${tabId ?? "<none>"} ` +
+                `existingForUuid=${JSON.stringify(
+                    Array.from(this.getUsersByUuid(joinRoomMessage.userUuid)).map((u) => ({
+                        id: u.id,
+                        tabId: u.tabId ?? "<none>",
+                        disconnected: u.disconnected,
+                    })),
+                )}`,
+        );
         if (tabId) {
             const tabKey = `${joinRoomMessage.userUuid}_${tabId}`;
             const existingUser = this.usersByTabKey.get(tabKey);
@@ -303,6 +317,15 @@ export class GameRoom implements BrothersFinder {
         // captured here (before the new user is added below) so they can be kicked once the new
         // connection has taken over, enforcing a single active session per room per user.
         const staleSessionsToKick = Array.from(this.getUsersByUuid(joinRoomMessage.userUuid));
+        if (staleSessionsToKick.length > 0) {
+            console.info(
+                `[session-diag] uuid=${joinRoomMessage.userUuid} tabId=${tabId ?? "<none>"} will kick ${
+                    staleSessionsToKick.length
+                } stale session(s): ${JSON.stringify(
+                    staleSessionsToKick.map((u) => ({ id: u.id, tabId: u.tabId ?? "<none>" })),
+                )}`,
+            );
+        }
 
         this.nextUserId++;
         const user = await User.create(
