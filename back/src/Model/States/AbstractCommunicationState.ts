@@ -123,6 +123,15 @@ export abstract class CommunicationState<T extends ICommunicationStrategy> imple
                 },
             });
         }
+
+        // This state is being retired for good (either the space transitioned to a different
+        // strategy, or the space itself is being destroyed) - finalize() is the only place that
+        // knows that. Without this, the strategy's own resources (for LivekitCommunicationStrategy
+        // specifically: the LiveKit room itself, and every registered user's connection) were
+        // never torn down, since cleanup() had no caller anywhere in the codebase - the room just
+        // leaked for as long as the process stayed up, accumulating stale/orphaned registrations
+        // across repeated WebRTC<->LiveKit transitions until a full restart reset everything.
+        this._currentStrategy.cleanup();
     }
 
     get communicationType(): string {
