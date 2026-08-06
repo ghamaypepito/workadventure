@@ -20,6 +20,7 @@
   .approve { background: #16a34a; color: white; }
   .deny { background: #dc2626; color: white; }
   .promote { background: #4338ca; color: white; }
+  .remove { background: #dc2626; color: white; }
   .empty { color: #64748b; font-style: italic; padding: 0.5rem 0; }
   .error { color: #f87171; margin-top: 1rem; }
   input[type="email"] { background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 0.5rem; color: white; margin-right: 0.5rem; width: 260px; }
@@ -92,6 +93,7 @@ async function load() {
           <div class="info"><div class="email">${escapeHtml(email)}</div></div>
           <div class="actions">
             <button class="promote" onclick="promoteEmail('${escapeAttr(email)}')">Make admin</button>
+            <button class="remove" onclick="removeEmail('${escapeAttr(email)}')">Remove</button>
           </div>
         </div>
       `).join('');
@@ -99,7 +101,14 @@ async function load() {
     const adminsEl = document.getElementById('admins-list');
     adminsEl.innerHTML = data.admins.length === 0
       ? '<div class="empty">No admins yet</div>'
-      : data.admins.map(email => `<div class="row"><div class="info"><div class="email">${escapeHtml(email)}</div></div></div>`).join('');
+      : data.admins.map(email => `
+        <div class="row">
+          <div class="info"><div class="email">${escapeHtml(email)}</div></div>
+          <div class="actions">
+            <button class="remove" onclick="demoteEmail('${escapeAttr(email)}')">Remove as admin</button>
+          </div>
+        </div>
+      `).join('');
   } catch (err) {
     showError(err);
   }
@@ -127,6 +136,20 @@ async function deny(email) {
 async function promoteEmail(email) {
   try {
     await api('/api/admin/promote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+    load();
+  } catch (err) { showError(err); }
+}
+async function removeEmail(email) {
+  if (!confirm(`Remove ${email}'s access to this workplace?`)) return;
+  try {
+    await api('/api/admin/revoke', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+    load();
+  } catch (err) { showError(err); }
+}
+async function demoteEmail(email) {
+  if (!confirm(`Remove admin rights from ${email}? They'll keep map access, just not admin access.`)) return;
+  try {
+    await api('/api/admin/demote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
     load();
   } catch (err) { showError(err); }
 }
