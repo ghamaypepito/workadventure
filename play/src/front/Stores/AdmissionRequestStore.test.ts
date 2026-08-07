@@ -1,6 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { admissionRequestStore as AdmissionRequestStoreType } from "./AdmissionRequestStore";
 
+// Mirrors the module-private POLL_INTERVAL_MS in AdmissionRequestStore.ts (not exported).
+const POLL_INTERVAL_MS = 5000;
+
 const { addToastMock, removeToastMock } = vi.hoisted(() => {
     return {
         addToastMock: vi.fn(),
@@ -143,6 +146,75 @@ describe("admissionRequestStore", () => {
         // No new poll should have been scheduled by the stale continuation either.
         await vi.advanceTimersByTimeAsync(20_000);
         expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not resurrect the stale chain or double-poll when startPolling() is called again while a stopped poll is still in flight", async () => {
+        let resolveFirstFetch: (value: unknown) => void = () => {
+            throw new Error("resolveFirstFetch was not assigned");
+        };
+        const firstFetch = new Promise((resolve) => {
+            resolveFirstFetch = resolve;
+        });
+
+        const fetchMock = vi.fn();
+        // First call (from the initial startPolling()) hangs until we resolve it manually below.
+        fetchMock.mockImplementationOnce(() => firstFetch);
+        // Every subsequent call (from the second, superseding startPolling() chain, and any of
+        // its later polls) resolves immediately with a different request than the stale chain
+        // will see, so we can tell the two chains apart.
+        fetchMock.mockResolvedValue({
+            status: 200,
+            ok: true,
+            json: () =>
+                Promise.resolve({
+                    requests: [{ requestId: "req-new", name: "Guest New", ts: 2000 }],
+                }),
+        });
+        globalThis.fetch = fetchMock;
+
+        admissionRequestStore.startPolling();
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+        // Room transition: stop, then immediately start again, all while the very first fetch
+        // (issued by the first startPolling() call) is still unresolved.
+        admissionRequestStore.stopPolling();
+        admissionRequestStore.startPolling();
+
+        // The new chain issues its own fetch right away.
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+        await vi.waitFor(() => expect(addToastMock).toHaveBeenCalledTimes(1));
+        expect(addToastMock).toHaveBeenCalledWith(
+            "AdmissionRequestToastComponent",
+            { requestId: "req-new", name: "Guest New", receivedAt: 2000, toastUuid: "req-new" },
+            "req-new",
+        );
+
+        // Now let the stale first fetch resolve, with a request the new chain never saw. If the
+        // stale chain wrongly thought it was still current, it would add a toast for "req-1" and
+        // arm its own second timer, on top of the new chain's timer.
+        resolveFirstFetch({
+            status: 200,
+            ok: true,
+            json: () =>
+                Promise.resolve({
+                    requests: [{ requestId: "req-1", name: "Guest One", ts: 1000 }],
+                }),
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(0);
+
+        // The stale chain must not have added a toast for the request only it saw.
+        expect(addToastMock).toHaveBeenCalledTimes(1);
+        expect(addToastMock).not.toHaveBeenCalledWith(
+            "AdmissionRequestToastComponent",
+            expect.objectContaining({ requestId: "req-1" }),
+            "req-1",
+        );
+
+        // Advance one full poll interval: only the new chain's timer should be alive, so fetch
+        // should be called exactly once more (not twice, which would indicate two live chains).
+        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+        expect(fetchMock).toHaveBeenCalledTimes(3);
     });
 
     it("removes the toast for a requestId that was present on the previous poll but is absent from the next", async () => {

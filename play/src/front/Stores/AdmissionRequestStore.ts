@@ -16,22 +16,24 @@ let pollTimer: ReturnType<typeof setTimeout> | undefined;
 // NOT clear this flag, so a subsequent startPolling() call (e.g. on the next room join) will
 // not resume polling a route that already told us it will 401 again.
 let stoppedPermanently = false;
-// The real "should this loop keep going" signal, separate from stoppedPermanently. pollTimer
-// alone can't answer this: it's only assigned inside scheduleNext(), so during the entire
-// window from "timer fires" to "next timer armed" (the duration of the in-flight fetch),
-// pollTimer holds an already-fired id and stopPolling() would clear nothing meaningful. running
-// is set synchronously by startPolling()/stopPolling() and checked both before arming the next
-// timeout and inside the in-flight poll's own continuation, so a stopPolling() call always wins
-// regardless of what stage the current poll cycle is in.
-let running = false;
+// Monotonically incrementing "which poll chain is the current one" counter. A boolean running
+// flag can't distinguish "this specific poll chain was stopped" from "some poll chain is
+// currently active": if stopPolling() is followed quickly by startPolling() (e.g. a room
+// transition landing mid-fetch), a boolean flips back to true before the stale chain's in-flight
+// fetch resolves, so the stale chain would wrongly believe it's still current. Each poll chain
+// instead captures the generation value that was current when IT started (see startPolling) and
+// compares against the live `generation` in every continuation. startPolling() and stopPolling()
+// both bump `generation`, so any chain that isn't the newest one always sees a mismatch and stops
+// itself without touching shared state (toasts, previousRequestIds, pollTimer).
+let generation = 0;
 // requestIds seen on the previous successful poll, so pollOnce can detect requests that
 // disappeared (cancelled, aged out server-side, actioned from another tab) and remove their
 // toasts instead of leaving them stuck forever.
 let previousRequestIds = new Set<string>();
 
-async function pollOnce(): Promise<void> {
+async function pollOnce(myGeneration: number): Promise<void> {
     const response = await fetch("/api/admission/pending");
-    if (!running) return;
+    if (myGeneration !== generation) return;
     if (response.status === 401) {
         stoppedPermanently = true;
         return;
@@ -42,7 +44,7 @@ async function pollOnce(): Promise<void> {
         return;
     }
     const data: { requests: PendingAdmissionRequest[] } = await response.json();
-    if (!running) return;
+    if (myGeneration !== generation) return;
     const currentRequestIds = new Set<string>();
     for (const request of data.requests) {
         currentRequestIds.add(request.requestId);
@@ -62,25 +64,25 @@ async function pollOnce(): Promise<void> {
     previousRequestIds = currentRequestIds;
 }
 
-function scheduleNext(): void {
-    if (!running || stoppedPermanently) return;
+function scheduleNext(myGeneration: number): void {
+    if (myGeneration !== generation || stoppedPermanently) return;
     pollTimer = setTimeout(() => {
-        pollOnce()
+        pollOnce(myGeneration)
             .catch((error) => console.error("[admission] pending poll failed", error))
-            .finally(scheduleNext);
+            .finally(() => scheduleNext(myGeneration));
     }, POLL_INTERVAL_MS);
 }
 
 export const admissionRequestStore = {
     startPolling(): void {
-        if (running || stoppedPermanently) return;
-        running = true;
-        pollOnce()
+        if (stoppedPermanently) return;
+        const myGeneration = ++generation;
+        pollOnce(myGeneration)
             .catch((error) => console.error("[admission] pending poll failed", error))
-            .finally(scheduleNext);
+            .finally(() => scheduleNext(myGeneration));
     },
     stopPolling(): void {
-        running = false;
+        generation++;
         if (pollTimer !== undefined) {
             clearTimeout(pollTimer);
             pollTimer = undefined;
