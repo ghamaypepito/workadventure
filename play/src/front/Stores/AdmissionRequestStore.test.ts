@@ -109,4 +109,64 @@ describe("admissionRequestStore", () => {
             "req-1",
         );
     });
+
+    it("does not create a toast or schedule another poll when stopPolling() is called while a poll is in flight", async () => {
+        let resolveFetch: (value: unknown) => void = () => {
+            throw new Error("resolveFetch was not assigned");
+        };
+        const pendingFetch = new Promise((resolve) => {
+            resolveFetch = resolve;
+        });
+        globalThis.fetch = vi.fn(() => pendingFetch) as unknown as typeof fetch;
+
+        admissionRequestStore.startPolling();
+        await vi.waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
+
+        // Stop while the fetch triggered by startPolling() is still in flight.
+        admissionRequestStore.stopPolling();
+
+        resolveFetch({
+            status: 200,
+            ok: true,
+            json: () =>
+                Promise.resolve({
+                    requests: [{ requestId: "req-1", name: "Guest One", ts: 1000 }],
+                }),
+        });
+
+        // Let the (stale) in-flight response's promise chain settle.
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(addToastMock).not.toHaveBeenCalled();
+
+        // No new poll should have been scheduled by the stale continuation either.
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("removes the toast for a requestId that was present on the previous poll but is absent from the next", async () => {
+        (globalThis.fetch as ReturnType<typeof vi.fn>)
+            .mockResolvedValueOnce({
+                status: 200,
+                ok: true,
+                json: () =>
+                    Promise.resolve({
+                        requests: [{ requestId: "req-1", name: "Guest One", ts: 1000 }],
+                    }),
+            })
+            .mockResolvedValue({
+                status: 200,
+                ok: true,
+                json: () => Promise.resolve({ requests: [] }),
+            });
+
+        admissionRequestStore.startPolling();
+        await vi.waitFor(() => expect(addToastMock).toHaveBeenCalledTimes(1));
+
+        await vi.advanceTimersByTimeAsync(5000);
+        await vi.waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
+
+        expect(removeToastMock).toHaveBeenCalledWith("req-1");
+    });
 });

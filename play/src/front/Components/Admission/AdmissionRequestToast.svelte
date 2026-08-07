@@ -16,11 +16,17 @@
     // shown inline rather than letting the toast close with nothing visibly having happened,
     // same failure-visibility pattern used by the Wave/Ping toasts' own inline error states.
     let destinationUnavailable = $state(false);
+    // Set on any other failure (403, 500, network error, etc.) - the specific 409/404 cases get
+    // their own more precise handling above/below, but every other failure must still be visible
+    // to the host rather than resetting to idle with only a console.error, matching the
+    // Wave/Ping toasts' failure-visibility pattern.
+    let actionFailed = $state(false);
 
     async function respond(body: Record<string, unknown>, endpoint: "approve" | "deny"): Promise<void> {
         if (actionState === "sending") return;
         actionState = "sending";
         destinationUnavailable = false;
+        actionFailed = false;
         try {
             const response = await fetch(`/api/admission/${endpoint}`, {
                 method: "POST",
@@ -33,12 +39,20 @@
                 actionState = "idle";
                 return;
             }
+            if (response.status === 404) {
+                // The request no longer exists (cancelled, aged out, actioned elsewhere) - the
+                // next poll tick would remove this toast anyway, but self-clear immediately
+                // rather than leaving a dead toast around until that tick runs.
+                toastStore.removeToast(toastUuid);
+                return;
+            }
             if (!response.ok) {
                 throw new Error(`Request failed: ${response.status}`);
             }
             toastStore.removeToast(toastUuid);
         } catch (error) {
             console.error(`[admission] ${endpoint} failed:`, error);
+            actionFailed = true;
             // eslint-disable-next-line require-atomic-updates
             actionState = "idle";
         }
@@ -90,6 +104,9 @@
         </button>
         {#if destinationUnavailable}
             <span class="text-xs opacity-70 col-span-2 text-center">That location isn't available right now</span>
+        {/if}
+        {#if actionFailed}
+            <span class="text-xs opacity-70 col-span-2 text-center">Couldn't respond - try again</span>
         {/if}
     {/snippet}
 </ToastContainer>
