@@ -11,7 +11,10 @@ interface PendingAdmissionRequest {
 
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
 // Set true on a 401 (guest / not signed in) so polling stops for good instead of retrying
-// forever against a route that can never succeed for this session.
+// forever against a route that can never succeed for this session. This flag is permanent for
+// the lifetime of this module instance: stopPolling() only cancels the pending timer, it does
+// NOT clear this flag, so a subsequent startPolling() call (e.g. on the next room join) will
+// not resume polling a route that already told us it will 401 again.
 let stoppedPermanently = false;
 
 async function pollOnce(): Promise<void> {
@@ -54,7 +57,6 @@ export const admissionRequestStore = {
             .finally(scheduleNext);
     },
     stopPolling(): void {
-        stoppedPermanently = false;
         if (pollTimer !== undefined) {
             clearTimeout(pollTimer);
             pollTimer = undefined;

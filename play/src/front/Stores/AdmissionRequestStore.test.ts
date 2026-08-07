@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import type { admissionRequestStore as AdmissionRequestStoreType } from "./AdmissionRequestStore";
 
 const { addToastMock, removeToastMock } = vi.hoisted(() => {
     return {
@@ -18,14 +19,21 @@ vi.mock("../Components/Admission/AdmissionRequestToast.svelte", () => ({
     default: "AdmissionRequestToastComponent",
 }));
 
-import { admissionRequestStore } from "./AdmissionRequestStore";
-
 describe("admissionRequestStore", () => {
-    beforeEach(() => {
+    let admissionRequestStore: typeof AdmissionRequestStoreType;
+
+    beforeEach(async () => {
         vi.useFakeTimers();
         addToastMock.mockClear();
         removeToastMock.mockClear();
         globalThis.fetch = vi.fn();
+
+        // Each test gets a fresh module instance so the module-level `stoppedPermanently` and
+        // `pollTimer` state from one test can never leak into the next - without this, a 401 in
+        // one test would permanently silence polling in a later test, since that flag is (by
+        // design, see AdmissionRequestStore.ts) never reset by the public API.
+        vi.resetModules();
+        ({ admissionRequestStore } = await import("./AdmissionRequestStore"));
     });
 
     afterEach(() => {
@@ -64,6 +72,13 @@ describe("admissionRequestStore", () => {
         admissionRequestStore.startPolling();
         await vi.waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
 
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+        // The stop must survive a stopPolling() -> startPolling() cycle (this is exactly what
+        // Task 5 wires into scene cleanup / next room-join), not just hold within one session.
+        admissionRequestStore.stopPolling();
+        admissionRequestStore.startPolling();
         await vi.advanceTimersByTimeAsync(20_000);
         expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     });
