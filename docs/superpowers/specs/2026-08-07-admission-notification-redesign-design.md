@@ -41,49 +41,34 @@ extending the existing map-script popup.
 
 ## Two fixed destinations, no live "meet me" option
 
-Both destinations are named map zones — "Demo Area" and "Receiving" — that
+Both destinations are named areas — "Demo Area" and "Receiving" — that
 already exist on the live map. Neither is present in the map JSON tracked in
 this git repo (the live map has since been edited through WorkAdventure's own
-in-browser map editor and is no longer in sync with the repo's copy), so
-their coordinates cannot be read from a file at build time. They also aren't
-in `admission-script.html`'s existing `KNOWN_ZONES` list.
-
-**Approach: capture coordinates at runtime, once, self-healing.**
-
-Add `"Demo Area"` and `"Receiving"` to `KNOWN_ZONES` in
-`admission-script.html`. The existing `onEnterZone` handler already fires
-`POST /api/admission/room` with `{room: zoneName}` for every known zone one
-of these two on top means any signed-in user who happens to walk through
-either zone causes its coordinates to get persisted to Redis (extending the
-existing `wa:last-room:<email>` write path to also update a new
-`wa:zone-coords:<zoneName>` key with that zone's teleport coordinates,
-keyed by zone name rather than by user). This requires no manual coordinate
-entry, and if the map is ever edited and a zone moves, the very next person
-who walks through it corrects the stored value automatically.
-
-Given the live map is under active editing (as seen in this session), there
-is a real cold-start case: if literally no one has ever walked through "Demo
-Area" or "Receiving" since this feature ships, no coordinates exist yet.
-Handled explicitly (see Edge cases) rather than assumed away.
+in-browser map editor and is no longer in sync with the repo's copy), but
+this turns out not to matter: `api/_lib/mapStorage.js` already fetches the
+live `.wam` file straight from the `map-storage` service at request time
+(`fetchWam()`) and resolves a named area to center coordinates
+(`resolveRoomCoordinates(wam, roomName)`), which is exactly how the existing
+`roomGet` handler already resolves a user's persisted last-room name to
+teleport coordinates. No new Redis key, no runtime coordinate-capture via
+`onEnterZone`, no cold-start case — `resolveRoomCoordinates(wam, "Demo
+Area")` and `resolveRoomCoordinates(wam, "Receiving")` are called directly,
+same as any other named-area lookup this codebase already does. If either
+area is ever renamed or removed on the live map, the very next `approve`
+call simply sees `resolveRoomCoordinates` return `null` for it (same
+already-handled case `roomGet` has for a stale last-room name).
 
 ## Data model (Redis)
 
-New key, alongside the existing `wa:last-room:<email>` /
-`wa:presence:<email>` keys from the prior admission design:
-
-- `wa:zone-coords:<zoneName>` (JSON string `{x, y}`) — last-seen coordinates
-  for a named zone. Written every time any signed-in user's client fires
-  `onEnterZone` for `"Demo Area"` or `"Receiving"` specifically (not for
-  every `KNOWN_ZONES` entry — only these two need to be queryable by name for
-  teleport purposes; the existing per-user last-room persistence is
-  unaffected and unchanged).
+No new Redis keys. `approve` gains a `destination` parameter but resolves
+the actual coordinates from the live map on each call rather than storing
+anything new.
 
 ## API changes (`api/admission/[...admissionPath].js`)
 
 | Route | Change |
 |---|---|
-| `POST /api/admission/room` | Body gains an optional `zoneName` field. When present, in addition to the existing per-user `wa:last-room:<email>` write, also writes `wa:zone-coords:<zoneName>` with `{x, y}` (x/y sourced from the same zone-enter event the caller already has via `WA.player.position` at the moment `onEnterZone` fires). |
-| `POST /api/admission/approve` | Body gains `destination: "demo-area" \| "receiving"` (was implicitly always "wherever the approver is"). Looks up `wa:zone-coords:"Demo Area"` or `wa:zone-coords:"Receiving"` accordingly and returns those coordinates in the approval payload the guest's poll picks up, instead of the approver's live position. Returns a 409 with a clear error if that zone's coordinates haven't been captured yet (see Edge cases). |
+| `POST /api/admission/approve` | Body gains `destination: "demo-area" \| "receiving"` (was implicitly always "wherever the approver is"). Maps that to the literal area name (`"Demo Area"` / `"Receiving"`), calls `fetchWam()` + `resolveRoomCoordinates(wam, areaName)`, and returns those coordinates in the approval payload the guest's poll picks up, instead of the approver's live position. Returns a 409 with a clear error if `resolveRoomCoordinates` returns `null` (area doesn't exist on the current live map). |
 | `POST /api/admission/deny` | **New.** Mirrors `cancel`'s shape (`{requestId}`) but marks the pending entry's status `"denied"` rather than deleting it outright, so the guest's in-flight poll can observe the terminal state once (see Guest-side handling below), then the entry is removed. |
 
 ## Guest-side handling of denial
@@ -145,12 +130,10 @@ since that responsibility now lives in the main app.
 
 ## Edge cases
 
-- **Cold start (no one has ever walked through "Demo Area"/"Receiving"
-  since this ships):** `approve` returns 409; the toast shows an inline
-  message ("Demo Area location not yet known — have someone walk through it
-  first") rather than failing silently. This is expected to self-resolve
-  within normal usage (anyone walking through either zone fixes it for
-  everyone), not something requiring manual seeding.
+- **Area renamed/removed from the live map:** `resolveRoomCoordinates`
+  returns `null`, `approve` returns 409, and the toast shows an inline
+  message ("Demo Area not found on the current map") rather than failing
+  silently or teleporting somewhere wrong.
 - **Two hosts both get the same pending request notified** (shouldn't happen
   — requests are targeted to one `targetEmail` per the existing design — but
   if it somehow did, e.g. via a stale toast after the request was already
@@ -163,13 +146,11 @@ since that responsibility now lives in the main app.
 
 ## Testing plan
 
-- `POST /api/admission/room` with `zoneName: "Demo Area"` persists
-  `wa:zone-coords:"Demo Area"`; without `zoneName`, only the existing
-  per-user `wa:last-room` write happens (no regression to that path).
-- `POST /api/admission/approve` with `destination: "demo-area"` before any
-  coordinates exist → 409.
-- `POST /api/admission/approve` with `destination: "receiving"` after a
-  `wa:zone-coords:"Receiving"` write → returns those exact coordinates.
+- `POST /api/admission/approve` with `destination: "demo-area"`, mocking
+  `fetchWam` to return a WAM with a `"Demo Area"` area → returns that area's
+  center coordinates.
+- `POST /api/admission/approve` with `destination: "receiving"`, mocking
+  `fetchWam` to return a WAM *without* a `"Receiving"` area → 409.
 - `POST /api/admission/deny` → subsequent `GET /api/admission/status` for
   that `requestId` returns `status: "denied"` once, then the entry is gone
   (`not_found` on a later check).
@@ -184,10 +165,14 @@ since that responsibility now lives in the main app.
 ## Rollout
 
 Same as the prior admission design: implemented once, applied to both
-`vings-workplace`/`master` and `pxlcode-workplace` branches. The zone names
+`vings-workplace`/`master` and `pxlcode-workplace` branches. The area names
 "Demo Area" and "Receiving" are specific to the `vings-workplace` map
 confirmed in this session; `pxlcode-workplace`'s map has not been checked for
-matching zones. If it lacks them, that deployment simply hits the cold-start
-409 case indefinitely until either equivalent zones are added to its map or
-its `KNOWN_ZONES`/destination values are adjusted separately — not a blocker
-for this design, but flagged so it isn't mistaken for a bug later.
+matching areas. If it lacks them, `approve` returns 409 for that deployment
+until equivalent areas are added to its map — not a blocker for this design,
+but flagged so it isn't mistaken for a bug later. Note also that
+`api/_lib/mapStorage.js` currently hardcodes the `vings-test` WAM path for
+`fetchWam()`/`patchWam()` — if `pxlcode-workplace` uses a different map path,
+that hardcoded path needs updating too, same pre-existing constraint the
+already-shipped `roomGet` handler has today, not something newly introduced
+by this change.
