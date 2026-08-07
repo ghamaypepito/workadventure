@@ -133,7 +133,7 @@
         transition:fly={{ duration: 200, x: isRTL ? sideBarWidth : -sideBarWidth }}
         style="width: {sideBarWidth}px; max-width: {sideBarWidth}px;"
         {@attach blocker}
-        class=" chatWindow !min-w-[150px] max-sm:!min-w-[150px] bg-contrast/50 backdrop-blur-md p-0"
+        class=" chatWindow !min-w-[150px] max-sm:!min-w-[150px] bg-contrast/80 backdrop-blur-md p-0"
     >
         {#if $hideActionBarStoreBecauseOfChatBar && isInSpecificDiscussion}
             <div class="close-window absolute end-2 top-3 rounded-sm p-1 bg-contrast/80 z-50">
