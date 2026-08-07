@@ -191,6 +191,8 @@
         class="fixed z-[1050] -translate-x-1/2 -translate-y-full bg-contrast/90 backdrop-blur rounded-xl shadow-2xl p-3 pointer-events-auto flex flex-col gap-1.5 w-60"
         style="left: {clampedLeft}px; top: {clampedTop}px"
         data-testid="person-hover-preview"
+        onmouseenter={() => hoverPreviewStore.cancelClear()}
+        onmouseleave={() => hoverPreviewStore.set(undefined)}
     >
         <div class="text-white text-sm font-bold flex items-center gap-2">
             <span

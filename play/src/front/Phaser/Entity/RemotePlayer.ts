@@ -362,6 +362,10 @@ export class RemotePlayer extends Character implements ActivatableInterface {
         // just passing over someone on the way elsewhere doesn't pop something up (the same
         // fly-by-click lesson from the fullscreen-exit dwell guard elsewhere in this app).
         this.on(Phaser.Input.Events.POINTER_OVER, () => {
+            // Re-entering the sprite (e.g. cursor wobbles back onto the woka on its way to the
+            // card) should cancel any pending clear from a just-fired POINTER_OUT, same as the
+            // card itself does in PersonHoverPreview.svelte.
+            hoverPreviewStore.cancelClear();
             this.hoverTimer = setTimeout(() => {
                 this.hoverTimer = undefined;
                 const player = this.scene.getRemotePlayersRepository().getPlayers().get(this.userId);
@@ -383,7 +387,10 @@ export class RemotePlayer extends Character implements ActivatableInterface {
                 clearTimeout(this.hoverTimer);
                 this.hoverTimer = undefined;
             }
-            hoverPreviewStore.update((current) => (current?.userId === this.userId ? undefined : current));
+            // Grace period, not an immediate clear: the card floats above the sprite, not over it,
+            // so leaving the sprite is the expected first step of the cursor travelling up to the
+            // card - see the comment on scheduleClear() in HoverPreviewStore.ts.
+            hoverPreviewStore.scheduleClear(this.userId);
         });
     }
 
