@@ -217,6 +217,41 @@ describe("admissionRequestStore", () => {
         expect(fetchMock).toHaveBeenCalledTimes(3);
     });
 
+    it("cancels an already-armed timer from a prior poll chain when startPolling() is called again, so it can never fire after stopPolling()", async () => {
+        // First chain: resolves immediately and reaches scheduleNext(), arming a real timer
+        // (pollTimer = T1) before the second startPolling() call below ever happens.
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+            status: 200,
+            ok: true,
+            json: () =>
+                Promise.resolve({
+                    requests: [{ requestId: "req-1", name: "Guest One", ts: 1000 }],
+                }),
+        });
+
+        admissionRequestStore.startPolling();
+        await vi.waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
+        // Let the first poll's promise chain settle so scheduleNext() runs and arms T1 via
+        // setTimeout, before we start a second chain on top of it.
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(0);
+
+        // Second startPolling() call with NO intervening stopPolling(): this must clear T1
+        // before arming its own timer, otherwise T1 is orphaned - uncancellable by any later
+        // stopPolling(), which can only clear whatever pollTimer currently points to.
+        admissionRequestStore.startPolling();
+        await vi.waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
+
+        admissionRequestStore.stopPolling();
+        const fetchCountAfterStop = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length;
+
+        // Advance well past the poll interval - if T1 had survived, it would fire here and
+        // dispatch a live fetch() even though the store was told to stop.
+        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 5);
+
+        expect(globalThis.fetch).toHaveBeenCalledTimes(fetchCountAfterStop);
+    });
+
     it("removes the toast for a requestId that was present on the previous poll but is absent from the next", async () => {
         (globalThis.fetch as ReturnType<typeof vi.fn>)
             .mockResolvedValueOnce({

@@ -74,7 +74,23 @@ function scheduleNext(myGeneration: number): void {
 }
 
 export const admissionRequestStore = {
+    // Repeated startPolling() calls (with no intervening stopPolling()) are NOT a no-op: each
+    // call starts a new, superseding poll chain, firing its own immediate fetch(). The old chain
+    // is neutralized via the generation check in pollOnce/scheduleNext, but nothing stops a
+    // caller from starting a chain on top of another. This is safe today because the sole call
+    // site (GameScene.ts) always pairs stopPolling() before startPolling() via Phaser's
+    // scene-cleanup lifecycle - that ordering is a caller invariant this module relies on but
+    // does not itself enforce.
     startPolling(): void {
+        if (pollTimer !== undefined) {
+            // Clear any timer armed by a previous, still-superseded poll chain so it can never
+            // fire after this call - otherwise a second startPolling() without an intervening
+            // stopPolling() would overwrite the only reference to that timer, orphaning it
+            // uncancellable by any future stopPolling() (which can only clear whatever
+            // `pollTimer` currently points to).
+            clearTimeout(pollTimer);
+            pollTimer = undefined;
+        }
         if (stoppedPermanently) return;
         const myGeneration = ++generation;
         pollOnce(myGeneration)
