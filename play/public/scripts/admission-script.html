@@ -160,6 +160,11 @@
             }
         });
 
+        // TODO: seat picker UI needs more work before showing it automatically - re-enable
+        // the two `await offerSeatPicker();` calls below (and drop this flag) once it's ready.
+        // Still reachable manually via the "Choose my seat" menu command registered below.
+        const AUTO_SEAT_PICKER_ENABLED = false;
+
         // If we have a persisted last room, spawn there and skip the seat-picker entirely.
         // Otherwise (first-ever login, or on any failure below), fall back to the safe
         // default of showing the seat-picker. This whole decision is wrapped in its own
@@ -172,15 +177,17 @@
             const lastRoom = await lastRoomRes.json();
             if (lastRoom.room && lastRoom.x !== null && lastRoom.y !== null) {
                 await WA.player.teleport(lastRoom.x, lastRoom.y);
-            } else {
+            } else if (AUTO_SEAT_PICKER_ENABLED) {
                 await offerSeatPicker();
             }
         } catch (e) {
             console.error('[admission] last-room lookup failed, falling back to seat picker', e);
-            try {
-                await offerSeatPicker();
-            } catch (e2) {
-                console.error('[admission] seat picker fallback also failed', e2);
+            if (AUTO_SEAT_PICKER_ENABLED) {
+                try {
+                    await offerSeatPicker();
+                } catch (e2) {
+                    console.error('[admission] seat picker fallback also failed', e2);
+                }
             }
         }
 
