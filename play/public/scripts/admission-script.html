@@ -28,6 +28,49 @@
 
     let currentZone = null;
 
+    async function pollPendingAdmissions() {
+        let currentBanner = null;
+        const check = async () => {
+            try {
+                const res = await fetch('/api/admission/pending');
+                if (res.ok) {
+                    const { requests } = await res.json();
+                    if (requests.length > 0 && !currentBanner) {
+                        const first = requests[0];
+                        currentBanner = WA.ui.openPopup(
+                            'admissionPendingPopup',
+                            (first.name || 'Someone') + ' wants to join the office.',
+                            [
+                                {
+                                    label: 'Let them in',
+                                    className: 'success',
+                                    callback: async () => {
+                                        await fetch('/api/admission/approve', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ requestId: first.requestId, room: currentZone }),
+                                        });
+                                        if (currentBanner) {
+                                            currentBanner.close();
+                                            currentBanner = null;
+                                        }
+                                    },
+                                },
+                            ],
+                        );
+                    } else if (requests.length === 0 && currentBanner) {
+                        currentBanner.close();
+                        currentBanner = null;
+                    }
+                }
+            } catch (e) {
+                console.error('[admission] pending poll error', e);
+            }
+            setTimeout(check, 5000);
+        };
+        check();
+    }
+
     WA.onInit().then(async () => {
         const user = getUser();
 
@@ -40,8 +83,8 @@
             // Unlike seat-picker.html (genuinely optional/skippable, hence closable), the guest
             // picker must NOT be user-closable: player controls are disabled here and there is
             // no other way back in if the guest closes it - no menu command, no fallback UI,
-            // and this picker doesn't apply to guests. Final positional arg is the closability
-            // flag; keep every other argument as-is.
+            // and pollPendingAdmissions doesn't apply to guests. Final positional arg is the
+            // closability flag; keep every other argument as-is.
             await WA.nav.openCoWebSite(
                 '/scripts/guest-picker.html?name=' + encodeURIComponent(name),
                 true,
@@ -123,7 +166,7 @@
         // self-contained try/catch (including a nested catch around the fallback
         // offerSeatPicker() call) so that no failure here - not the room lookup, not either
         // offerSeatPicker() call - can ever escape and prevent the unconditional trailer
-        // code below (menu command registration) from running.
+        // code below (menu command registration, pollPendingAdmissions) from running.
         try {
             const lastRoomRes = await fetch('/api/admission/room');
             const lastRoom = await lastRoomRes.json();
@@ -146,6 +189,11 @@
         WA.ui.registerMenuCommand('Choose my seat', () => {
             offerSeatPicker().catch((e) => console.error('[admission] seat picker error', e));
         });
+
+        // Recognized users also watch for guests waiting to be let in (only requests
+        // targeted at them, per the pending() filter in api/admission/[...admissionPath].js).
+        // Run this unconditionally regardless of which branch above ran or whether it errored.
+        pollPendingAdmissions();
     });
 })();
 </script>

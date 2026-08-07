@@ -166,18 +166,9 @@ async function pending(req, res) {
     res.end(JSON.stringify({ requests }));
 }
 
-// Maps the fixed-destination toast buttons to their literal area names on the live map.
-// "room" (a free-form zone name, historically the approver's own live position) is still
-// accepted for backward compatibility, but the new toast always sends `destination`.
-const DESTINATION_AREAS = {
-    'demo-area': 'Demo Area',
-    receiving: 'Receiving',
-};
-
-// Requires a signed-in (non-guest) user. Accepts either `destination` (one of
-// DESTINATION_AREAS' keys - resolved against the live map and validated to exist before
-// anything is written) or the older free-form `room` field, so the guest can be spawned
-// wherever the approver chose.
+// Requires a signed-in (non-guest) user. Optionally records the approver's current room
+// (their client passes its locally-tracked zone, see admission-script.html) so the guest
+// can be spawned into the same room/area as whoever let them in.
 async function approve(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
@@ -187,26 +178,6 @@ async function approve(req, res) {
         res.statusCode = 400;
         res.end(JSON.stringify({ error: 'Missing requestId' }));
         return;
-    }
-
-    let roomName = parsed.room || null;
-    if (parsed.destination) {
-        const areaName = DESTINATION_AREAS[parsed.destination];
-        if (!areaName) {
-            res.statusCode = 400;
-            res.end(JSON.stringify({ error: 'Unknown destination' }));
-            return;
-        }
-        // Resolved (and validated) outside the Redis transaction below: fetchWam() is a
-        // network call to map-storage, and there's no reason to hold a Redis round-trip
-        // open while it runs.
-        const wam = await fetchWam();
-        if (!resolveRoomCoordinates(wam, areaName)) {
-            res.statusCode = 409;
-            res.end(JSON.stringify({ error: `${areaName} not found on the current map` }));
-            return;
-        }
-        roomName = areaName;
     }
 
     let forbidden = false;
@@ -222,52 +193,7 @@ async function approve(req, res) {
         }
         data.status = 'approved';
         data.approvedBy = user.email;
-        if (roomName) data.room = roomName;
-        await client.command('HSET', PENDING_KEY, parsed.requestId, JSON.stringify(data));
-        return true;
-    });
-
-    if (forbidden) {
-        res.statusCode = 403;
-        res.end(JSON.stringify({ error: 'You are not the target of this request' }));
-        return;
-    }
-
-    if (!updated) {
-        res.statusCode = 404;
-        res.end(JSON.stringify({ error: 'Request not found (may have expired or already been handled)' }));
-        return;
-    }
-
-    res.statusCode = 200;
-    res.end(JSON.stringify({ success: true }));
-}
-
-// Requires a signed-in (non-guest) user. Only the request's target may deny it - marks it
-// denied (rather than deleting outright) so the guest's next status() poll observes the
-// terminal state once; the entry then reaps naturally via pending()'s existing age-based
-// cleanup, same as an unconsumed approved entry already does today.
-async function deny(req, res) {
-    const user = await requireUser(req, res);
-    if (!user) return;
-
-    const parsed = await readBody(req);
-    if (parsed === null || !parsed.requestId) {
-        res.statusCode = 400;
-        res.end(JSON.stringify({ error: 'Missing requestId' }));
-        return;
-    }
-
-    let forbidden = false;
-    const updated = await withRedis(REDIS_URL, async (client) => {
-        const raw = await client.command('HGET', PENDING_KEY, parsed.requestId);
-        if (!raw) return false;
-        const data = JSON.parse(raw);
-        if (data.target !== user.email.toLowerCase()) {
-            forbidden = true;
-            return false;
-        }
-        data.status = 'denied';
+        if (parsed.room) data.room = parsed.room;
         await client.command('HSET', PENDING_KEY, parsed.requestId, JSON.stringify(data));
         return true;
     });
@@ -487,8 +413,6 @@ module.exports = async (req, res) => {
             await pending(req, res);
         } else if (segment === 'approve') {
             await approve(req, res);
-        } else if (segment === 'deny') {
-            await deny(req, res);
         } else if (segment === 'chat-history') {
             if (req.method === 'POST') await chatHistoryPost(req, res);
             else await chatHistoryGet(req, res);

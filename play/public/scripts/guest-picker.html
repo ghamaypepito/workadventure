@@ -240,14 +240,6 @@
                 return;
             }
 
-            if (data.status === 'denied') {
-                // Silent by design (per product decision) - no error shown, just straight back
-                // to the picker, unlike not_found below which does explain itself.
-                currentRequestId = null;
-                showPicker();
-                return;
-            }
-
             if (data.status === 'not_found') {
                 currentRequestId = null;
                 showError('That request is no longer active — pick someone else.');
