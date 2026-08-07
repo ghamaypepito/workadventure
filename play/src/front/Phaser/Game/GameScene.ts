@@ -62,6 +62,7 @@ import {
 import { Room } from "../../Connection/Room";
 import { CharacterTextureError } from "../../Exception/CharacterTextureError";
 import { localUserStore } from "../../Connection/LocalUserStore";
+import { admissionRequestStore } from "../../Stores/AdmissionRequestStore";
 import { HtmlUtils } from "../../WebRtc/HtmlUtils";
 import { Loader } from "../Components/Loader";
 import { RemotePlayer } from "../Entity/RemotePlayer";
@@ -1065,6 +1066,19 @@ export class GameScene extends DirtyScene {
                 Sentry.captureException(e);
             });
 
+        // Start polling for incoming admission requests once the room is actually joined - a
+        // guest (no signed-in session) will just get a 401 on the first poll and
+        // AdmissionRequestStore stops permanently on its own; no need to gate this on being a
+        // recognized user beforehand.
+        this.roomJoinedPromiseDeferred.promise
+            .then(() => {
+                admissionRequestStore.startPolling();
+            })
+            .catch((e) => {
+                console.error(e);
+                Sentry.captureException(e);
+            });
+
         if (this.game.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) {
             this._focusFx = new DarkenOutsideAreaEffect(this, this.cameras.main, {
                 feather: 10,
@@ -1200,6 +1214,7 @@ export class GameScene extends DirtyScene {
 
     public cleanupClosingScene(): void {
         this.abortController?.abort();
+        admissionRequestStore.stopPolling();
         this.unregisterAudioContextPlaybackRetry?.();
         this.unregisterAudioContextPlaybackRetry = undefined;
 
