@@ -90,7 +90,15 @@ export class StateLifecycleManager implements IStateLifecycleManager {
     }
 
     /**
-     * Disposes of all resources (timeouts) and finalizes pending states.
+     * Disposes of all resources (timeouts) and finalizes both the pending and the current state.
+     *
+     * The current state also needs finalizing here, not just the pending one: dispose() is what
+     * runs when the whole space is torn down (see CommunicationManager.destroy()), and in the
+     * common case - no transition in flight - _toFinalizeState is undefined and _currentState is
+     * the only state there is. Leaving it un-finalized skips its strategy's cleanup() (for
+     * LivekitCommunicationStrategy: deleting the LiveKit room and disconnecting every registered
+     * user), which is the same class of leak fixed in AbstractCommunicationState.finalize() - just
+     * via space teardown instead of a state transition.
      */
     dispose(): void {
         // Finalize pending state if exists
@@ -102,6 +110,13 @@ export class StateLifecycleManager implements IStateLifecycleManager {
                 Sentry.captureException(error);
             }
             this._toFinalizeState = undefined;
+        }
+
+        try {
+            this.finalizeState(this._currentState);
+        } catch (error) {
+            console.error("Error while finalizing current state during dispose:", error);
+            Sentry.captureException(error);
         }
 
         this.clearFinalizeTimeout();

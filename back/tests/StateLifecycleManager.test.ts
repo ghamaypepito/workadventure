@@ -183,6 +183,36 @@ describe("StateLifecycleManager", () => {
             expect(() => manager.dispose()).not.toThrow();
         });
 
+        it("should finalize the current state when disposed with no pending transition", () => {
+            // No transitionTo() call here - the manager is disposed straight from its initial
+            // state (mirrors a space being destroyed outright, e.g. its last user leaving, while
+            // it was never mid-transition). Without this, the live strategy (LiveKit room + its
+            // registered users, for LivekitCommunicationStrategy) never gets torn down, leaking
+            // exactly like the bug fixed in AbstractCommunicationState.finalize() - just via a
+            // different path (whole-space teardown instead of a state transition).
+            manager.dispose();
+
+            expect(initialState.finalize).toHaveBeenCalled();
+        });
+
+        it("should finalize both the pending and the current state when disposed mid-transition", async () => {
+            const newState = createState(CommunicationType.LIVEKIT);
+            await manager.transitionTo(newState);
+
+            manager.dispose();
+
+            expect(initialState.finalize).toHaveBeenCalled();
+            expect(newState.finalize).toHaveBeenCalled();
+        });
+
+        it("should handle finalize errors on the current state gracefully when disposed", () => {
+            vi.mocked(initialState.finalize).mockImplementation(() => {
+                throw new Error("Finalize error");
+            });
+
+            expect(() => manager.dispose()).not.toThrow();
+        });
+
         it("should handle finalize errors gracefully when disposed", async () => {
             const newState = createState(CommunicationType.LIVEKIT);
             vi.mocked(initialState.finalize).mockImplementation(() => {

@@ -416,6 +416,12 @@ export class CommunicationManager implements ICommunicationManager {
 
     public destroy(): void {
         this._recordingManager.destroy();
+        // Finalizes the current (and any pending) communication state so its strategy's cleanup()
+        // runs - without this, a space destroyed while it was never mid-transition (the common
+        // case) left its live LiveKit room and every registered user's registration orphaned,
+        // leaking exactly like the bug fixed in AbstractCommunicationState.finalize() but via
+        // whole-space teardown instead of a state transition. See StateLifecycleManager.dispose().
+        this.lifecycleManager.dispose();
     }
 }
 
