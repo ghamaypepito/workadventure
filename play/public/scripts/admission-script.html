@@ -160,9 +160,10 @@
             }
         });
 
-        // TODO: seat picker UI needs more work before showing it automatically - re-enable
-        // the two `await offerSeatPicker();` calls below (and drop this flag) once it's ready.
-        // Still reachable manually via the "Choose my seat" menu command registered below.
+        // TODO: seat picker UI needs more work before it's shown again - re-enable the two
+        // `await offerSeatPicker();` calls below (and drop this flag) once it's ready. The
+        // "Choose my seat" menu command has been removed too (see below), so there's currently
+        // no way to reach it from the UI at all - offerSeatPicker() stays defined but unused.
         const AUTO_SEAT_PICKER_ENABLED = false;
 
         // If we have a persisted last room, spawn there and skip the seat-picker entirely.
@@ -190,12 +191,6 @@
                 }
             }
         }
-
-        // Let them reopen the seat picker anytime from the menu, not just once at join
-        // (e.g. if they skipped it, or want to switch desks later).
-        WA.ui.registerMenuCommand('Choose my seat', () => {
-            offerSeatPicker().catch((e) => console.error('[admission] seat picker error', e));
-        });
 
         // Recognized users also watch for guests waiting to be let in (only requests
         // targeted at them, per the pending() filter in api/admission/[...admissionPath].js).
