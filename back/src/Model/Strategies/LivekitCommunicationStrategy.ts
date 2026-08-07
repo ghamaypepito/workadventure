@@ -59,11 +59,15 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
 
     async addUser(user: SpaceUser): Promise<void> {
         return this.queueUserOperation(user.spaceUserId, async () => {
-            // Check if the user is already streaming
+            // A second addUser() for a spaceUserId already marked streaming, with no deleteUser()
+            // in between, is most commonly a reconnect the server hasn't yet observed the old
+            // connection drop for - not a genuine duplicate. Previously this bailed out entirely,
+            // leaving a reconnecting client with no fresh invitation and no way to ever resume
+            // (see the identical fix in addUserToNotify() below for the receiving-side case).
+            // Refresh the registration and fall through so a new token is sent below, instead of
+            // silently dropping it.
             if (this.streamingUsers.has(user.spaceUserId)) {
-                console.warn("User already streaming in the room", user.spaceUserId);
-                Sentry.captureMessage(`User already streaming in the room ${user.spaceUserId}`);
-                return;
+                console.warn("User already streaming in the room - refreshing registration", user.spaceUserId);
             }
 
             // Ensure the Livekit room is created (only once)
@@ -190,10 +194,13 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
 
     async addUserToNotify(user: SpaceUser): Promise<void> {
         return this.queueUserOperation(user.spaceUserId, async () => {
+            // See the identical comment in addUser() above: a second addUserToNotify() for a
+            // spaceUserId already marked receiving, with no deleteUserFromNotify() in between, is
+            // most commonly a reconnect - not a genuine duplicate. Bailing out here used to leave
+            // the reconnecting client with no fresh invitation and audio that never resumed once
+            // the first connection dropped. Refresh the registration and fall through instead.
             if (this.receivingUsers.has(user.spaceUserId)) {
-                console.warn("User already receiving in the room", user.spaceUserId);
-                Sentry.captureMessage(`User already receiving in the room ${user.spaceUserId}`);
-                return;
+                console.warn("User already receiving in the room - refreshing registration", user.spaceUserId);
             }
 
             this.receivingUsers.set(user.spaceUserId, user);
