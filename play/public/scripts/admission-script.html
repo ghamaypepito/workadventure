@@ -75,24 +75,10 @@
         const user = getUser();
 
         if (!user) {
-            // Guest: no SSO session at all. Show the picker as a co-website (map scripts run
-            // in a hidden iframe, so UI must go through openCoWebSite/openPopup, never direct
-            // DOM injection into this script's own document).
-            WA.controls.disablePlayerControls();
-            const name = await WA.player.name;
-            // Unlike seat-picker.html (genuinely optional/skippable, hence closable), the guest
-            // picker must NOT be user-closable: player controls are disabled here and there is
-            // no other way back in if the guest closes it - no menu command, no fallback UI,
-            // and pollPendingAdmissions doesn't apply to guests. Final positional arg is the
-            // closability flag; keep every other argument as-is.
-            await WA.nav.openCoWebSite(
-                '/scripts/guest-picker.html?name=' + encodeURIComponent(name),
-                true,
-                undefined,
-                40,
-                0,
-                false,
-            );
+            // Guest: no SSO session. Admission gating removed - guests enter the map directly,
+            // same as recognized users, with no picker/wait step. Everything below this point
+            // (identity registration, zone tracking, room persistence, pollPendingAdmissions)
+            // assumes a signed-in session, so it stays skipped for guests.
             return;
         }
 
