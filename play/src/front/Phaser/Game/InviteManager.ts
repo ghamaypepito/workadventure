@@ -127,18 +127,12 @@ export class InviteManager {
                     // still too quiet over ambient game/call audio. Web Audio GainNode accepts
                     // values above 1.0, so this doubles the sample's amplitude in software.
                     scene.playSound(kind === "wave" ? "wave" : "ping-bell", 2.0);
-                    // Log into the sender's real direct-message conversation (not the separate,
-                    // area-wide Proximity Chat log this used to write to) - waves/pings from a
-                    // specific person belong in that person's own conversation, not duplicated
-                    // into a second, unrelated place. Best-effort: silently skipped if chatID
-                    // isn't resolvable yet, since the toast/sound above already succeeded.
-                    const chatID = scene.getRemotePlayersRepository().getPlayerByUuid(payload.senderUserUuid)?.chatID;
-                    if (chatID) {
-                        const text = kind === "wave" ? "👋 Waved" : "🔔 Pinged";
-                        sendDirectMessage(chatID, text).catch((error) =>
-                            console.error(`Failed to log ${kind} in chat:`, error),
-                        );
-                    }
+                    // Deliberately does NOT also call sendDirectMessage here: requestSocialSignal()
+                    // below already logs "👋 Waved"/"🔔 Pinged" once, from the sender's account, when
+                    // the wave/ping is sent. Logging it again here - from the receiver's own account,
+                    // purely because a signal arrived - made every wave show up twice in the shared
+                    // conversation, the second one looking exactly like the receiver had waved back
+                    // on their own.
                 }
             }),
         );
