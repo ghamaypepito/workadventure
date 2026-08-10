@@ -7,7 +7,6 @@ import { gameManager } from "../Phaser/Game/GameManager";
 
 class UserMessageManager {
     receiveBannedMessageListener!: () => void;
-    receiveDuplicateSessionListener!: (message: string) => void;
 
     constructor() {
         // Not unsubscribing is ok, this is a singleton.
@@ -28,18 +27,12 @@ class UserMessageManager {
             } else if (event.type === AdminMessageEventTypes.banned) {
                 banMessageStore.addMessage(event.text);
                 this.receiveBannedMessageListener();
-            } else if (event.type === AdminMessageEventTypes.duplicateSession) {
-                this.receiveDuplicateSessionListener(event.text);
             }
         });
     }
 
     setReceiveBanListener(callback: () => void) {
         this.receiveBannedMessageListener = callback;
-    }
-
-    setReceiveDuplicateSessionListener(callback: (message: string) => void) {
-        this.receiveDuplicateSessionListener = callback;
     }
 }
 export const userMessageManager = new UserMessageManager();

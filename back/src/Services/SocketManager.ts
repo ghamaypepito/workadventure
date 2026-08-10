@@ -633,15 +633,6 @@ export class SocketManager {
     }
 
     private joinWebRtcRoom(user: User, group: Group) {
-        // TEMP DIAGNOSTIC (investigating proximity audio not working outside conference rooms,
-        // 2026-08-11): logs every joinSpaceRequestMessage sent to a client, so we can see from
-        // Railway logs whether both members of a freshly-formed 2-person group actually each get
-        // sent this message with a valid, matching spaceName - vs. one being silently missed or
-        // sent with a different/undefined value. Remove once the cause is confirmed.
-        console.info(
-            `[group-diag] joinWebRtcRoom user=${user.uuid} userId=${user.id} groupId=${group.getId()} ` +
-                `groupSize=${group.getUsers().length} spaceName=${JSON.stringify(group.spaceName)}`,
-        );
         user.write({
             $case: "joinSpaceRequestMessage",
             joinSpaceRequestMessage: {

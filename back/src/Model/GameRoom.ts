@@ -282,20 +282,6 @@ export class GameRoom implements BrothersFinder {
         // Check if there's a stale connection from the same browser tab and kill it immediately
         // This prevents "ghost" users appearing when a user reconnects after a network disruption
         const tabId = joinRoomMessage.tabId;
-        // TEMP DIAGNOSTIC (investigating proximity/WebRTC audio outage reported 2026-08-06): logs
-        // every join's tabId and whatever this UUID already has registered, to find out whether
-        // legitimate single-tab sessions are being misclassified as duplicates and kicked in a
-        // loop. Remove once the cause is confirmed.
-        console.info(
-            `[session-diag] join uuid=${joinRoomMessage.userUuid} tabId=${tabId ?? "<none>"} ` +
-                `existingForUuid=${JSON.stringify(
-                    Array.from(this.getUsersByUuid(joinRoomMessage.userUuid)).map((u) => ({
-                        id: u.id,
-                        tabId: u.tabId ?? "<none>",
-                        disconnected: u.disconnected,
-                    })),
-                )}`,
-        );
         if (tabId) {
             const tabKey = `${joinRoomMessage.userUuid}_${tabId}`;
             const existingUser = this.usersByTabKey.get(tabKey);
@@ -312,20 +298,16 @@ export class GameRoom implements BrothersFinder {
             }
         }
 
-        // Same-tab reconnections are already handled above (stale tabId cleanup, killed immediately).
-        // Anyone still registered under this UUID at this point is a genuinely different tab/window -
-        // captured here (before the new user is added below) so they can be kicked once the new
-        // connection has taken over, enforcing a single active session per room per user.
-        const staleSessionsToKick = Array.from(this.getUsersByUuid(joinRoomMessage.userUuid));
-        if (staleSessionsToKick.length > 0) {
-            console.info(
-                `[session-diag] uuid=${joinRoomMessage.userUuid} tabId=${tabId ?? "<none>"} will kick ${
-                    staleSessionsToKick.length
-                } stale session(s): ${JSON.stringify(
-                    staleSessionsToKick.map((u) => ({ id: u.id, tabId: u.tabId ?? "<none>" })),
-                )}`,
-            );
-        }
+        // Same-tab reconnections are already handled above (stale tabId cleanup, killed
+        // immediately). A genuinely different tab/window connecting under the same UUID at this
+        // point used to be force-kicked after a grace period, enforcing a single active session
+        // per room per user - but any reconnect the server hadn't yet cleaned up the old
+        // connection for (a network blip, a tab being backgrounded, a strategy-switch reconnect)
+        // looked identical to a real second tab, and got kicked the same way. That churn tore
+        // proximity groups and LiveKit registrations down mid-formation, which is why audio for
+        // ad-hoc conversations (outside fixed conference-room spaces) kept failing to establish.
+        // Same-tab reconnections should not be reported as duplicate sessions.
+        const sameUserAlreadyConnected = (this.getUsersByUuid(joinRoomMessage.userUuid)?.size ?? 0) >= 1;
 
         this.nextUserId++;
         const user = await User.create(
@@ -377,27 +359,16 @@ export class GameRoom implements BrothersFinder {
             admin.sendUserJoin(user.uuid, user.name, user.IPAddress);
         }
 
-        // A new tab/window just took over this user's session in this room - kick every other tab
-        // still connected under the same UUID, so exactly one session is ever active at a time.
-        // Reuses the same "warn, then disconnect after a grace period" pattern as the admin ban flow
-        // (SocketManager.handleBanUserMessage): the grace period gives the front-end time to show the
-        // message and close its own connection cleanly, avoiding the auto-reconnect path a hard,
-        // unannounced server-side close would otherwise trigger on that other tab.
-        for (const staleUser of staleSessionsToKick) {
-            staleUser.write({
-                $case: "sendUserMessage",
-                sendUserMessage: {
-                    type: "duplicateSession",
-                    message: "You opened WorkAdventure in another tab or window, so this session was closed.",
-                },
+        // If the same user was already connected before this join, notify this new (duplicate)
+        // connection - purely informational (see DuplicateUserConnectedModal.svelte on the
+        // front-end), no session is closed. Neither session gets torn down, so an ordinary
+        // reconnect racing slightly ahead of the old connection's cleanup no longer disrupts
+        // whatever proximity group or LiveKit registration was already in progress.
+        if (sameUserAlreadyConnected) {
+            user.write({
+                $case: "duplicateUserConnectedMessage",
+                duplicateUserConnectedMessage: {},
             });
-            setTimeout(() => {
-                this.leave(staleUser);
-                endUserConnectionWithReason(
-                    staleUser.socket,
-                    `User ${joinRoomMessage.userUuid} opened a new session in another tab.`,
-                );
-            }, 3000);
         }
 
         return user;
@@ -492,25 +463,8 @@ export class GameRoom implements BrothersFinder {
 
             // If the user is moving, don't try to join
             if (user.getPosition().moving) {
-                // TEMP DIAGNOSTIC (investigating proximity audio not working outside conference
-                // rooms, 2026-08-11): confirms whether a stationary-looking user is actually still
-                // reporting moving=true server-side, which would block group formation entirely.
-                // Remove once the cause is confirmed.
-                console.info(`[group-diag] user=${user.uuid} skipped group check: still moving=true`);
                 return;
             }
-
-            // TEMP DIAGNOSTIC: see comment above. Logs what the nearby-search found for a
-            // group-less, stationary user - null (nobody in range), a solo User (about to form a
-            // brand new 2-person group), or an existing Group (about to join it).
-            console.info(
-                `[group-diag] user=${user.uuid} searchClosestAvailableUserOrGroup => ` +
-                    (closestItem === null
-                        ? "null (nobody in range)"
-                        : closestItem instanceof Group
-                          ? `Group id=${closestItem.getId()} size=${closestItem.getUsers().length}`
-                          : `User uuid=${closestItem.uuid}`),
-            );
 
             if (closestItem !== null) {
                 if (closestItem instanceof Group) {
