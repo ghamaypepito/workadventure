@@ -492,8 +492,25 @@ export class GameRoom implements BrothersFinder {
 
             // If the user is moving, don't try to join
             if (user.getPosition().moving) {
+                // TEMP DIAGNOSTIC (investigating proximity audio not working outside conference
+                // rooms, 2026-08-11): confirms whether a stationary-looking user is actually still
+                // reporting moving=true server-side, which would block group formation entirely.
+                // Remove once the cause is confirmed.
+                console.info(`[group-diag] user=${user.uuid} skipped group check: still moving=true`);
                 return;
             }
+
+            // TEMP DIAGNOSTIC: see comment above. Logs what the nearby-search found for a
+            // group-less, stationary user - null (nobody in range), a solo User (about to form a
+            // brand new 2-person group), or an existing Group (about to join it).
+            console.info(
+                `[group-diag] user=${user.uuid} searchClosestAvailableUserOrGroup => ` +
+                    (closestItem === null
+                        ? "null (nobody in range)"
+                        : closestItem instanceof Group
+                          ? `Group id=${closestItem.getId()} size=${closestItem.getUsers().length}`
+                          : `User uuid=${closestItem.uuid}`),
+            );
 
             if (closestItem !== null) {
                 if (closestItem instanceof Group) {
