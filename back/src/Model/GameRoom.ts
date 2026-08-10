@@ -532,6 +532,16 @@ export class GameRoom implements BrothersFinder {
 
                 if (distance > this.groupRadius) {
                     hasKickOutSomeone = true;
+                    // TEMP DIAGNOSTIC (investigating recurring audio drop for stationary/close
+                    // users, 2026-08-11): logs the exact distance and groupRadius at the moment a
+                    // group member is flagged for exceeding the radius, so we can see the real
+                    // numbers in production instead of guessing. Remove once the cause is
+                    // confirmed.
+                    console.info(
+                        `[distance-diag] group=${group.getId()} headMember=${headMember.uuid} ` +
+                            `distanceFromGroupCenter=${distance.toFixed(1)} groupRadius=${this.groupRadius} ` +
+                            `movingUser=${user.uuid} groupSize=${group.getUsers().length}`,
+                    );
                     break;
                 }
             }
