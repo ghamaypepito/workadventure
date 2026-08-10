@@ -344,6 +344,15 @@ export class CameraManager extends Phaser.Events.EventEmitter {
 
     public startFollowPlayer(player: Player | RemotePlayer, duration = 0): void {
         this.playerToFollow = player;
+        // animateToFocus() below calls camera.startFollow() unconditionally, so the camera really
+        // is following again after this point - draggedAwayFromPlayer must agree, or a later
+        // dragBy() will (wrongly, per its own !draggedAwayFromPlayer guard) skip calling
+        // camera.stopFollow(), and the manual scroll it applies gets silently overridden by the
+        // still-active follow on the next frame. This is reachable indirectly: e.g. opening the
+        // woka menu on a player calls followRemotePlayer() -> here, and closing it calls
+        // stopFollowRemotePlayer() -> here again - neither of those callers know or care about
+        // drag state, so this is the one place common to both that can keep it in sync.
+        this.draggedAwayFromPlayer = false;
 
         this.animateToFocus(player, duration, () => {});
         return;
