@@ -97,10 +97,13 @@ export class LiveKitRoom implements LiveKitRoomInterface {
                 // Commented out: the default simulcast layers are sufficient for our use case
                 // videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
                 videoCodec: "vp9",
-                // If a user does not support VP9 or AV1, do not downgrade everyone to VP8.
-                // Instead, let the publisher publish both VP9 and VP8 tracks using simulcast.
-                // Viewers will see the best possible codec they support.
-                backupCodecPolicy: BackupCodecPolicy.SIMULCAST,
+                // SIMULCAST would have the publisher upload a full VP8 simulcast backup
+                // alongside VP9 at all times, even when nobody needs it - a constant extra
+                // upload burden that can saturate a constrained uplink (this was implicated in
+                // a recurring audio dropout for a user on a bandwidth-limited connection).
+                // REGRESSION only sends VP8 (to everyone in the group) when a subscriber that
+                // can't decode VP9 is actually present, keeping the common case single-stream.
+                backupCodecPolicy: BackupCodecPolicy.REGRESSION,
                 backupCodec: {
                     codec: "vp8",
                 },
