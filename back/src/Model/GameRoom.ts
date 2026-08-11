@@ -77,6 +77,14 @@ const MEETING_INVITATION_MAX_REQUESTS = 50;
 const MEETING_INVITATION_MAX_REQUESTS_PER_USER = 3;
 const MEETING_INVITATION_REQUEST_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
+/**
+ * A group member is only kicked once they drift this many times past groupRadius from the
+ * group's barycenter. Without this hysteresis, ordinary in-place movement while chatting
+ * (turning, small steps) can momentarily exceed groupRadius, dissolving the group and forcing a
+ * brand-new LiveKit room (and a full audio/video reconnect) even though nobody actually left.
+ */
+const GROUP_LEAVE_RADIUS_MULTIPLIER = 1.5;
+
 export class GameRoom implements BrothersFinder {
     public readonly id: string;
     // Users, sorted by ID
@@ -87,6 +95,8 @@ export class GameRoom implements BrothersFinder {
     private readonly usersByTabKey = new Map<string, User>();
     private readonly groups: SpatialMap<number, Group>;
     private readonly admins = new Set<Admin>();
+    // See GROUP_LEAVE_RADIUS_MULTIPLIER for why this differs from groupRadius.
+    private readonly leaveRadius: number;
 
     private itemsState = new Map<number, unknown>();
 
@@ -136,6 +146,7 @@ export class GameRoom implements BrothersFinder {
     ) {
         // uniq id for the room is timestamp
         this.id = Date.now().toString();
+        this.leaveRadius = this.groupRadius * GROUP_LEAVE_RADIUS_MULTIPLIER;
 
         if (initialWam) {
             this.wamManager = new WamManager(initialWam);
@@ -530,18 +541,8 @@ export class GameRoom implements BrothersFinder {
                 const headPosition = headMember.getPosition();
                 const distance = GameRoom.computeDistanceBetweenPositions(headPosition, previewNewGroupPosition);
 
-                if (distance > this.groupRadius) {
+                if (distance > this.leaveRadius) {
                     hasKickOutSomeone = true;
-                    // TEMP DIAGNOSTIC (investigating recurring audio drop for stationary/close
-                    // users, 2026-08-11): logs the exact distance and groupRadius at the moment a
-                    // group member is flagged for exceeding the radius, so we can see the real
-                    // numbers in production instead of guessing. Remove once the cause is
-                    // confirmed.
-                    console.info(
-                        `[distance-diag] group=${group.getId()} headMember=${headMember.uuid} ` +
-                            `distanceFromGroupCenter=${distance.toFixed(1)} groupRadius=${this.groupRadius} ` +
-                            `movingUser=${user.uuid} groupSize=${group.getUsers().length}`,
-                    );
                     break;
                 }
             }
@@ -552,7 +553,7 @@ export class GameRoom implements BrothersFinder {
              */
             const userDistance = GameRoom.computeDistanceBetweenPositions(user.getPosition(), previewNewGroupPosition);
 
-            if (hasKickOutSomeone && userDistance > this.groupRadius) {
+            if (hasKickOutSomeone && userDistance > this.leaveRadius) {
                 if (user.hasFollowers() && group.getUsers().length === 3 && followingMembers.length === 1) {
                     const other = group
                         .getUsers()

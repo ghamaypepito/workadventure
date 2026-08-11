@@ -182,12 +182,50 @@ describe("GameRoom", () => {
         expect(connectCalled).toBe(true);
         expect(disconnectCallNumber).toBe(0);
 
-        world.updatePosition(user2, new Point(100 + 160 + 160 + 1, 100));
+        // groupRadius is 160 here, but the kick decision uses leaveRadius (groupRadius * 1.5 =
+        // 240) as hysteresis against jitter, so the displacement must clear that larger radius.
+        world.updatePosition(user2, new Point(681, 100));
 
         expect(disconnectCallNumber).toBe(2);
 
-        world.updatePosition(user2, new Point(262, 100));
+        world.updatePosition(user2, new Point(685, 100));
         expect(disconnectCallNumber).toBe(2);
+    });
+
+    it("should not kick a group member out for movement within the leave-radius hysteresis", async () => {
+        let disconnectCallNumber = 0;
+        const connect: ConnectCallback = (): void => {};
+        const disconnect: DisconnectCallback = (): void => {
+            disconnectCallNumber++;
+        };
+
+        const world = await GameRoom.create(
+            "https://play.workadventu.re/_/global/localhost/test.json",
+            connect,
+            disconnect,
+            160,
+            160,
+            () => {},
+            () => {},
+            () => {},
+            emote,
+            () => {},
+            () => {},
+            () => {}
+        );
+
+        const user1Socket = createMockUserSocket();
+        const user1 = await world.join(user1Socket.socket, createJoinRoomMessage("1", 100, 100));
+
+        const user2Socket = createMockUserSocket();
+        const user2 = await world.join(user2Socket.socket, createJoinRoomMessage("2", 259, 100));
+
+        // Barycenter is (179.5, 100). Moving user2 to 490 puts the barycenter's distance to each
+        // member at 195 - past groupRadius (160), matching production jitter, but still inside
+        // leaveRadius (240), so nobody should be kicked out and no brand-new LiveKit room forced.
+        world.updatePosition(user2, new Point(490, 100));
+
+        expect(disconnectCallNumber).toBe(0);
     });
 
     it("should not notify duplicate user when reconnecting from the same tab", async () => {
