@@ -70,9 +70,14 @@ export const microphoneAccessIssueStore = writable<MediaAccessIssue | null>(null
 
 /**
  * A store that contains the camera state requested by the user (on or off).
+ *
+ * Always starts off regardless of what was requested last session - camera/mic should default
+ * off for every fresh join, not carry over the previous session's on/off state.
+ * localUserStore.getRequestedCameraState() is intentionally unused here for that reason; the
+ * setter calls below still persist it in case another surface reads it later.
  */
 function createRequestedCameraState() {
-    const { subscribe, set } = writable(localUserStore.getRequestedCameraState());
+    const { subscribe, set } = writable(false);
 
     return {
         subscribe,
@@ -89,9 +94,10 @@ function createRequestedCameraState() {
 
 /**
  * A store that contains the microphone state requested by the user (on or off).
+ * See createRequestedCameraState() above for why this always starts off.
  */
 function createRequestedMicrophoneState() {
-    const { subscribe, set } = writable(localUserStore.getRequestedMicrophoneState());
+    const { subscribe, set } = writable(false);
 
     return {
         subscribe,
