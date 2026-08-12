@@ -16,6 +16,13 @@ export const EnvironmentVariables = z.object({
     GROUP_RADIUS: PositiveIntAsString.optional()
         .transform((val) => toNumber(val, 48))
         .describe("Radius (in pixels) of a group/bubble. Defaults to 48"),
+    WOKA_SPEED: PositiveIntAsString.optional()
+        .transform((val) => toNumber(val, 9))
+        .describe(
+            "Avatar (WOKA) movement speed. Must match the value configured on the play/pusher " +
+                "service - used here only to size the group leave-radius hysteresis so it scales " +
+                "with how fast users actually move. Defaults to 9",
+        ),
     ADMIN_API_URL: AbsoluteOrRelativeUrl.optional()
         .transform(emptyStringToUndefined)
         .describe("URL of the admin API for centralized configuration"),

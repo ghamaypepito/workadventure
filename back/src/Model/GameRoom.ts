@@ -78,18 +78,40 @@ const MEETING_INVITATION_MAX_REQUESTS_PER_USER = 3;
 const MEETING_INVITATION_REQUEST_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
- * A group member is only kicked once they drift this many times past groupRadius from the
+ * A group member is only kicked once they drift this many units past groupRadius from the
  * group's barycenter. Without this hysteresis, ordinary in-place movement while chatting
  * (turning, small steps) can momentarily exceed groupRadius, dissolving the group and forcing a
  * brand-new LiveKit room (and a full audio/video reconnect, plus a camera/mic re-mute) even
  * though nobody actually left.
  *
- * 1.5 (2026-08-11) still wasn't enough headroom: production [distance-diag2] logging on
- * 2026-08-12 showed groups still being kicked regularly at 72-115 units at the current
- * WOKA_SPEED, i.e. routinely just past that threshold. 3x gives real margin above what's
- * actually been observed instead of guessing again.
+ * History of getting this wrong by guessing a fixed multiplier instead of deriving it:
+ * - 1.5x groupRadius (2026-08-11): not enough - kicks still observed regularly at 72-115 units
+ *   against a 72-unit threshold, once WOKA_SPEED was tuned back up.
+ * - 3x groupRadius (2026-08-12): safe at the WOKA_SPEED in use that day, but static again - the
+ *   next WOKA_SPEED increase would silently make it insufficient exactly the same way.
+ *
+ * leaveRadius is now derived from the actual configured WOKA_SPEED (computeLeaveRadius below)
+ * instead of a static multiplier, so raising movement speed automatically widens the hysteresis
+ * with it - this class of bug shouldn't need a third manual re-tuning.
  */
-const GROUP_LEAVE_RADIUS_MULTIPLIER = 3;
+const GROUP_LEAVE_RADIUS_BASE_MULTIPLIER = 3;
+/**
+ * Extra leave-radius margin added per unit of WOKA_SPEED, on top of the base multiplier above.
+ * Calibrated against production [distance-diag2] data from 2026-08-12 (kicks regularly at
+ * 72-115 units, groupRadius=48, WOKA_SPEED in the 15-20 range that day) with headroom to spare,
+ * so a future WOKA_SPEED increase grows the hysteresis instead of eroding it.
+ */
+const GROUP_LEAVE_RADIUS_PER_WOKA_SPEED_UNIT = 4;
+
+/**
+ * Sane defaults for WOKA_SPEED (must match play/pusher's own default) — used only as a fallback
+ * when the caller doesn't supply one (e.g. existing tests that predate this parameter).
+ */
+const DEFAULT_WOKA_SPEED = 9;
+
+function computeLeaveRadius(groupRadius: number, wokaSpeed: number): number {
+    return groupRadius * GROUP_LEAVE_RADIUS_BASE_MULTIPLIER + wokaSpeed * GROUP_LEAVE_RADIUS_PER_WOKA_SPEED_UNIT;
+}
 
 export class GameRoom implements BrothersFinder {
     public readonly id: string;
@@ -149,10 +171,15 @@ export class GameRoom implements BrothersFinder {
         private _mapUrl: string,
         private _wamUrl?: string,
         initialWam?: WAMFileFormat,
+        wokaSpeed: number = DEFAULT_WOKA_SPEED,
     ) {
         // uniq id for the room is timestamp
         this.id = Date.now().toString();
-        this.leaveRadius = this.groupRadius * GROUP_LEAVE_RADIUS_MULTIPLIER;
+        this.leaveRadius = computeLeaveRadius(this.groupRadius, wokaSpeed);
+        console.info(
+            `[group-leave-radius] groupRadius=${this.groupRadius} wokaSpeed=${wokaSpeed} ` +
+                `leaveRadius=${this.leaveRadius} for room ${this._roomUrl}`,
+        );
 
         if (initialWam) {
             this.wamManager = new WamManager(initialWam);
@@ -189,6 +216,7 @@ export class GameRoom implements BrothersFinder {
         onLockGroup: LockGroupCallback,
         onPlayerDetailsUpdated: PlayerDetailsUpdatedCallback,
         onGroupUsersUpdated: GroupUsersUpdatedCallback,
+        wokaSpeed: number = DEFAULT_WOKA_SPEED,
     ): Promise<GameRoom> {
         const mapDetails = await GameRoom.getMapDetails(roomUrl);
         const wamUrl = mapDetails.wamUrl;
@@ -224,6 +252,7 @@ export class GameRoom implements BrothersFinder {
             mapUrl,
             wamUrl,
             wamFile,
+            wokaSpeed,
         );
         const areaZoneTracker = new AreaZoneTracker(gameRoom);
         // Let's instantiate the class that will track the lockable areas and set the variable to false when they are empty.

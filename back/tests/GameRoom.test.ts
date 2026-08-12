@@ -182,13 +182,14 @@ describe("GameRoom", () => {
         expect(connectCalled).toBe(true);
         expect(disconnectCallNumber).toBe(0);
 
-        // groupRadius is 160 here, but the kick decision uses leaveRadius (groupRadius * 3 =
-        // 480) as hysteresis against jitter, so the displacement must clear that larger radius.
-        world.updatePosition(user2, new Point(1061, 100));
+        // groupRadius is 160 here; no wokaSpeed is passed so it defaults to 9, giving
+        // leaveRadius = 160*3 + 9*4 = 516 as hysteresis against jitter, so the displacement must
+        // clear that larger radius.
+        world.updatePosition(user2, new Point(1213, 100));
 
         expect(disconnectCallNumber).toBe(2);
 
-        world.updatePosition(user2, new Point(1065, 100));
+        world.updatePosition(user2, new Point(1217, 100));
         expect(disconnectCallNumber).toBe(2);
     });
 
@@ -222,8 +223,48 @@ describe("GameRoom", () => {
 
         // Barycenter is (179.5, 100). Moving user2 to 490 puts the barycenter's distance to each
         // member at 195 - past groupRadius (160), matching production jitter, but still inside
-        // leaveRadius (480), so nobody should be kicked out and no brand-new LiveKit room forced.
+        // leaveRadius (516, using the default wokaSpeed of 9), so nobody should be kicked out and
+        // no brand-new LiveKit room forced.
         world.updatePosition(user2, new Point(490, 100));
+
+        expect(disconnectCallNumber).toBe(0);
+    });
+
+    it("widens the leave-radius hysteresis when a higher wokaSpeed is configured", async () => {
+        let disconnectCallNumber = 0;
+        const connect: ConnectCallback = (): void => {};
+        const disconnect: DisconnectCallback = (): void => {
+            disconnectCallNumber++;
+        };
+
+        // Same groupRadius as the tests above (160), but a much higher wokaSpeed (50 - the exact
+        // misconfigured production value from 2026-08-11) so leaveRadius = 160*3 + 50*4 = 680,
+        // well past the 516 the default wokaSpeed would give.
+        const world = await GameRoom.create(
+            "https://play.workadventu.re/_/global/localhost/test.json",
+            connect,
+            disconnect,
+            160,
+            160,
+            () => {},
+            () => {},
+            () => {},
+            emote,
+            () => {},
+            () => {},
+            () => {},
+            50
+        );
+
+        const user1Socket = createMockUserSocket();
+        const user1 = await world.join(user1Socket.socket, createJoinRoomMessage("1", 100, 100));
+
+        const user2Socket = createMockUserSocket();
+        const user2 = await world.join(user2Socket.socket, createJoinRoomMessage("2", 259, 100));
+
+        // Distance-to-barycenter here is 558.5 - well past the default-wokaSpeed leaveRadius
+        // (516) that the earlier test asserted a kick at, but still inside this room's 680.
+        world.updatePosition(user2, new Point(1217, 100));
 
         expect(disconnectCallNumber).toBe(0);
     });

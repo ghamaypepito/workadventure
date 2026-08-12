@@ -72,7 +72,7 @@ import type { UserSocket } from "../Model/User";
 import { User } from "../Model/User";
 import { ProtobufUtils } from "../Model/Websocket/ProtobufUtils";
 import { Group } from "../Model/Group";
-import { GROUP_RADIUS, MINIMUM_DISTANCE } from "../Enum/EnvironmentVariable";
+import { GROUP_RADIUS, MINIMUM_DISTANCE, WOKA_SPEED } from "../Enum/EnvironmentVariable";
 import type { PositionInterface } from "../Model/PositionInterface";
 import type { EventSocket, RoomSocket, VariableSocket } from "../RoomManager";
 import type { Zone, ZonePosition } from "../Model/Zone";
@@ -379,6 +379,7 @@ export class SocketManager {
                 (currentZone: ZonePosition, group: Group, listener: RoomSocket) => {
                     this.onUserEntersOrLeavesBubble(currentZone, group, listener);
                 },
+                WOKA_SPEED,
             )
                 .then((gameRoom) => {
                     // The room may have been invalidated while it was still loading.
