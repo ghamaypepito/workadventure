@@ -41,4 +41,42 @@ describe("UrlManager vanity invitation slugs", () => {
         setPathname("/login");
         expect(urlManager.getGameConnexionType()).toBe(GameConnexionTypes.login);
     });
+
+    describe("surviving a full-page redirect (e.g. SSO)", () => {
+        beforeEach(() => localStorage.clear());
+        afterEach(() => localStorage.clear());
+
+        it("remembers a vanity slug before navigating away, and restores it afterward", () => {
+            setPathname("/john");
+            urlManager.rememberVanitySlugBeforeNavigatingAway();
+
+            // Simulate landing back after the SSO round trip, on the real room path.
+            setPathname("/~/vings-test/map.wam");
+            urlManager.restoreVanitySlugIfRemembered();
+
+            expect(window.location.pathname).toBe("/john");
+        });
+
+        it("does nothing when the current path isn't a vanity slug", () => {
+            setPathname("/~/vings-test/map.wam");
+            urlManager.rememberVanitySlugBeforeNavigatingAway();
+
+            setPathname("/~/vings-test/map.wam");
+            urlManager.restoreVanitySlugIfRemembered();
+
+            expect(window.location.pathname).toBe("/~/vings-test/map.wam");
+        });
+
+        it("only restores once", () => {
+            setPathname("/john");
+            urlManager.rememberVanitySlugBeforeNavigatingAway();
+
+            setPathname("/~/vings-test/map.wam");
+            urlManager.restoreVanitySlugIfRemembered();
+            setPathname("/~/vings-test/map.wam");
+            urlManager.restoreVanitySlugIfRemembered();
+
+            expect(window.location.pathname).toBe("/~/vings-test/map.wam");
+        });
+    });
 });

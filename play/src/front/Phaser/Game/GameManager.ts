@@ -5,6 +5,7 @@ import { Deferred } from "@workadventure/shared-utils";
 import { TimeoutError } from "@workadventure/shared-utils/src/Abort/TimeoutError";
 import { connectionManager } from "../../Connection/ConnectionManager";
 import { localUserStore } from "../../Connection/LocalUserStore";
+import { urlManager } from "../../Url/UrlManager";
 import type { Room } from "../../Connection/Room";
 import { showHelpCameraSettings } from "../../Stores/HelpSettingsStore";
 import {
@@ -69,6 +70,10 @@ export class GameManager {
         this.scenePlugin = scenePlugin;
         const result = await connectionManager.initGameConnexion();
         if (result instanceof URL) {
+            // This is a full-page redirect (e.g. OpenID/SSO) that will leave the app and come
+            // back via a server-built URL, which only knows the real room path - remember any
+            // vanity invitation slug now so it can be restored once we're back with a room.
+            urlManager.rememberVanitySlugBeforeNavigatingAway();
             window.location.assign(result.toString());
             // window.location.assign is not immediate and Javascript keeps running after.
             // so we need to redirect to an empty Phaser scene, waiting for the redirection to take place
@@ -84,6 +89,7 @@ export class GameManager {
         }
         let nextScene = result.nextScene;
         this.startRoom = result.room;
+        urlManager.restoreVanitySlugIfRemembered();
         this._startRoomPromise.resolve(result.room);
         this.loadMap(this.startRoom);
 

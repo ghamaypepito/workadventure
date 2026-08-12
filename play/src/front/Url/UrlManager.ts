@@ -39,6 +39,8 @@ function isVanitySlug(pathname: string): boolean {
     return !RESERVED_TOP_LEVEL_SLUGS.has(match[1].toLowerCase());
 }
 
+const VANITY_SLUG_STORAGE_KEY = "vanityInvitationSlug";
+
 //this class is responsible with analysing and editing the game's url
 class UrlManager {
     /**
@@ -48,6 +50,35 @@ class UrlManager {
      */
     public resolveRoomPath(pathname: string): string {
         return isVanitySlug(pathname) ? VANITY_SLUG_ROOM_TARGET : pathname;
+    }
+
+    /**
+     * Call before any full-page navigation away from the app (e.g. the OpenID/SSO redirect,
+     * which necessarily leaves the site and comes back via a server-built URL that only knows
+     * the real room path). Persists the vanity slug currently shown in the address bar - if
+     * there is one - in localStorage, since it wouldn't otherwise survive the round trip.
+     */
+    public rememberVanitySlugBeforeNavigatingAway(): void {
+        const pathname = window.location.pathname;
+        if (isVanitySlug(pathname)) {
+            localStorage.setItem(VANITY_SLUG_STORAGE_KEY, pathname);
+        }
+    }
+
+    /**
+     * Call once the app has a room loaded (whether or not a full-page redirect happened in
+     * between). If a vanity slug was remembered, puts it back in the address bar - without a
+     * page reload - and forgets it, so it only ever gets applied once.
+     */
+    public restoreVanitySlugIfRemembered(): void {
+        const slug = localStorage.getItem(VANITY_SLUG_STORAGE_KEY);
+        if (slug === null) {
+            return;
+        }
+        localStorage.removeItem(VANITY_SLUG_STORAGE_KEY);
+        if (window.location.pathname !== slug) {
+            history.replaceState(null, "", slug);
+        }
     }
 
     public getGameConnexionType(): GameConnexionTypes {
