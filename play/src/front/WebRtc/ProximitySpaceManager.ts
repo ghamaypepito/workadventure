@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/svelte";
 import { AbortError } from "@workadventure/shared-utils/src/Abort/AbortError";
 import type { RoomConnection } from "../Connection/RoomConnection";
 import type { ProximityChatRoomManager } from "../Chat/Connection/Proximity/ProximityChatRoomManager";
+import { requestedCameraState, requestedMicrophoneState } from "../Stores/MediaStore";
 
 const debug = Debug("ProximitySpaceManager");
 
@@ -17,6 +18,11 @@ export class ProximitySpaceManager {
     ) {
         this.joinSpaceRequestMessageSubscription = roomConnection.joinSpaceRequestMessage.subscribe(
             ({ spaceName, propertiesToSync }) => {
+                // Camera/mic force off on every new proximity group or conference join, even if
+                // they were on a moment ago in a different space - each new call starts muted
+                // and the user re-enables them explicitly.
+                requestedCameraState.disableWebcam();
+                requestedMicrophoneState.disableMicrophone();
                 this.proximityChatRoomManager.joinDefaultSpace(spaceName, propertiesToSync).catch((e) => {
                     if (e instanceof AbortError) {
                         debug("Join space aborted. The user left the space before finalizing the join", e);
