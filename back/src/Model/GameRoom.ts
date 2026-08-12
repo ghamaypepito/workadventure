@@ -543,6 +543,13 @@ export class GameRoom implements BrothersFinder {
 
                 if (distance > this.leaveRadius) {
                     hasKickOutSomeone = true;
+                    // TEMP DIAGNOSTIC (2026-08-12): re-added to confirm whether WOKA_SPEED=20
+                    // still outruns leaveRadius after the hysteresis fix. Remove once confirmed.
+                    console.info(
+                        `[distance-diag2] group=${group.getId()} headMember=${headMember.uuid} ` +
+                            `distanceFromGroupCenter=${distance.toFixed(1)} groupRadius=${this.groupRadius} ` +
+                            `leaveRadius=${this.leaveRadius.toFixed(1)} movingUser=${user.uuid} groupSize=${group.getUsers().length}`,
+                    );
                     break;
                 }
             }
