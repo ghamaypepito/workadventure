@@ -273,7 +273,7 @@ class ConnectionManager {
                     window.location.protocol +
                     "//" +
                     window.location.host +
-                    window.location.pathname +
+                    urlManager.resolveRoomPath(window.location.pathname) +
                     (query ? "?" + query : "") + //use urlParams because the token param must be deleted
                     window.location.hash;
             }
