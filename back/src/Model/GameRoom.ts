@@ -81,9 +81,15 @@ const MEETING_INVITATION_REQUEST_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
  * A group member is only kicked once they drift this many times past groupRadius from the
  * group's barycenter. Without this hysteresis, ordinary in-place movement while chatting
  * (turning, small steps) can momentarily exceed groupRadius, dissolving the group and forcing a
- * brand-new LiveKit room (and a full audio/video reconnect) even though nobody actually left.
+ * brand-new LiveKit room (and a full audio/video reconnect, plus a camera/mic re-mute) even
+ * though nobody actually left.
+ *
+ * 1.5 (2026-08-11) still wasn't enough headroom: production [distance-diag2] logging on
+ * 2026-08-12 showed groups still being kicked regularly at 72-115 units at the current
+ * WOKA_SPEED, i.e. routinely just past that threshold. 3x gives real margin above what's
+ * actually been observed instead of guessing again.
  */
-const GROUP_LEAVE_RADIUS_MULTIPLIER = 1.5;
+const GROUP_LEAVE_RADIUS_MULTIPLIER = 3;
 
 export class GameRoom implements BrothersFinder {
     public readonly id: string;
@@ -543,13 +549,6 @@ export class GameRoom implements BrothersFinder {
 
                 if (distance > this.leaveRadius) {
                     hasKickOutSomeone = true;
-                    // TEMP DIAGNOSTIC (2026-08-12): re-added to confirm whether WOKA_SPEED=20
-                    // still outruns leaveRadius after the hysteresis fix. Remove once confirmed.
-                    console.info(
-                        `[distance-diag2] group=${group.getId()} headMember=${headMember.uuid} ` +
-                            `distanceFromGroupCenter=${distance.toFixed(1)} groupRadius=${this.groupRadius} ` +
-                            `leaveRadius=${this.leaveRadius.toFixed(1)} movingUser=${user.uuid} groupSize=${group.getUsers().length}`,
-                    );
                     break;
                 }
             }

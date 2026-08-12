@@ -182,13 +182,13 @@ describe("GameRoom", () => {
         expect(connectCalled).toBe(true);
         expect(disconnectCallNumber).toBe(0);
 
-        // groupRadius is 160 here, but the kick decision uses leaveRadius (groupRadius * 1.5 =
-        // 240) as hysteresis against jitter, so the displacement must clear that larger radius.
-        world.updatePosition(user2, new Point(681, 100));
+        // groupRadius is 160 here, but the kick decision uses leaveRadius (groupRadius * 3 =
+        // 480) as hysteresis against jitter, so the displacement must clear that larger radius.
+        world.updatePosition(user2, new Point(1061, 100));
 
         expect(disconnectCallNumber).toBe(2);
 
-        world.updatePosition(user2, new Point(685, 100));
+        world.updatePosition(user2, new Point(1065, 100));
         expect(disconnectCallNumber).toBe(2);
     });
 
@@ -222,7 +222,7 @@ describe("GameRoom", () => {
 
         // Barycenter is (179.5, 100). Moving user2 to 490 puts the barycenter's distance to each
         // member at 195 - past groupRadius (160), matching production jitter, but still inside
-        // leaveRadius (240), so nobody should be kicked out and no brand-new LiveKit room forced.
+        // leaveRadius (480), so nobody should be kicked out and no brand-new LiveKit room forced.
         world.updatePosition(user2, new Point(490, 100));
 
         expect(disconnectCallNumber).toBe(0);
