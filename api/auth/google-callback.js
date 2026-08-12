@@ -17,7 +17,11 @@ const PUSHER_URL = 'https://play-production-7ae3.up.railway.app';
 function signMatrixBridgeToken(email) {
     const secret = process.env.MATRIX_BRIDGE_SECRET;
     if (!secret) return null;
-    const payload = b64url(Buffer.from(JSON.stringify({ email, exp: Date.now() + 60_000 })));
+    // 60s was too tight for the real redirect chain (provider -> here -> pusher -> Synapse OIDC
+    // hop) and expired in transit under ordinary network latency, blocking real logins with
+    // "Invalid or expired bridge token". 5 minutes keeps the token short-lived while giving that
+    // chain real headroom.
+    const payload = b64url(Buffer.from(JSON.stringify({ email, exp: Date.now() + 5 * 60_000 })));
     const sig = b64url(crypto.createHmac('sha256', secret).update(payload).digest());
     return `${payload}.${sig}`;
 }

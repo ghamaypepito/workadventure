@@ -10,7 +10,8 @@ const PUSHER_URL = 'https://play-production-7ae3.up.railway.app';
 function signMatrixBridgeToken(email) {
     const secret = process.env.MATRIX_BRIDGE_SECRET;
     if (!secret) return null;
-    const payload = b64url(Buffer.from(JSON.stringify({ email, exp: Date.now() + 60_000 })));
+    // See google-callback.js's signMatrixBridgeToken for why this is 5 minutes, not 60s.
+    const payload = b64url(Buffer.from(JSON.stringify({ email, exp: Date.now() + 5 * 60_000 })));
     const sig = b64url(crypto.createHmac('sha256', secret).update(payload).digest());
     return `${payload}.${sig}`;
 }
