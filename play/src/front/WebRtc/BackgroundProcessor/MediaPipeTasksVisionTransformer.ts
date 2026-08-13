@@ -597,10 +597,34 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
         }
 
         // Setup canvas dimensions
-        const videoWidth = this.inputVideo.videoWidth;
-        const videoHeight = this.inputVideo.videoHeight;
+        let videoWidth = this.inputVideo.videoWidth;
+        let videoHeight = this.inputVideo.videoHeight;
 
-        // Check for invalid dimensions (0x0 or undefined)
+        // A freshly attached srcObject can briefly report readyState >= 2 (metadata loaded,
+        // play() resolved) before its first frame actually renders, leaving intrinsic
+        // dimensions at 0x0 for a moment - a known transient browser race, not a real failure.
+        // This happens far more often now that the camera track gets stopped and restarted on
+        // every proximity/conference join. Wait briefly for the video element's "resize" event
+        // (fired once real dimensions are known) instead of failing the whole transform over a
+        // race that resolves itself within a frame or two.
+        if (!videoWidth || !videoHeight || videoWidth === 0 || videoHeight === 0) {
+            let resizeListener: (() => void) | undefined;
+            const dimensionsBecameValid = new Promise<void>((resolve) => {
+                resizeListener = () => resolve();
+                this.inputVideo.addEventListener("resize", resizeListener, { once: true });
+            });
+            const timeout = new Promise<void>((resolve) => setTimeout(resolve, 1000));
+            try {
+                await raceAbort(Promise.race([dimensionsBecameValid, timeout]), signal);
+            } finally {
+                if (resizeListener) {
+                    this.inputVideo.removeEventListener("resize", resizeListener);
+                }
+            }
+            videoWidth = this.inputVideo.videoWidth;
+            videoHeight = this.inputVideo.videoHeight;
+        }
+
         if (!videoWidth || !videoHeight || videoWidth === 0 || videoHeight === 0) {
             const errorMessage = `[MediaPipe Tasks Vision] Invalid video dimensions: ${videoWidth}x${videoHeight}. Cannot process stream with 0x0 size.`;
             throw new Error(errorMessage);

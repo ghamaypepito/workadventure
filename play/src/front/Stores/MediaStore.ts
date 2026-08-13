@@ -1067,11 +1067,12 @@ async function runLocalVideoTrackUpdate(
         console.warn("[MediaStore] Failed to transform stream:", error);
         Sentry.captureException(error);
         warningMessageStore.addWarningMessage(get(LL).warning.backgroundProcessing.failedToApply());
-        backgroundConfigStore.reset();
-        setIfCurrent({
-            type: "error",
-            error: error instanceof Error ? error : new Error("Background transform failed"),
-        });
+        // Fall back to the raw (unblurred) camera track rather than a blank video - a transform
+        // failure should degrade to "background effect briefly off" instead of "no video at
+        // all". The background config itself is left alone (previously reset to "none" here,
+        // silently discarding the user's preference); the next successful transform re-applies
+        // it automatically once whatever caused this one-off failure clears.
+        setIfCurrent(videoTrackValue);
     }
 }
 
