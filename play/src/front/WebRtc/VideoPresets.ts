@@ -276,6 +276,11 @@ export function selectAV1Preset(
     const bitrate = Math.round(Math.min(maxBitrate, Math.sqrt((width * height) / (1920 * 1080)) * maxBitrate));
     return {
         bitrate,
-        fps: 30,
+        // AV1 has no hardware encoder on most laptops, so it's encoded in software - expensive
+        // enough that running it alongside a simultaneous camera encode (VP9) can starve the
+        // audio pipeline and cause audible glitches. Screen content (slides, docs, code) rarely
+        // needs more than 15fps, and halving it meaningfully cuts that CPU cost without
+        // sacrificing AV1's compression advantage for the actual content quality.
+        fps: 15,
     };
 }
