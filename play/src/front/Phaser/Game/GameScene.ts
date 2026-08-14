@@ -1170,6 +1170,41 @@ export class GameScene extends DirtyScene {
         });
     }
 
+    private static readonly WAVE_SOUND_REPEAT_COUNT = 4;
+
+    /**
+     * Plays the "wave" sound 4 times in a row, fading it out on the final repeat instead of
+     * cutting off abruptly - a single play was reported as too easy to miss.
+     */
+    public playWaveSound(volume: number = 0.2) {
+        if (!statusChanger.allowNotificationSound()) return;
+
+        const instance = this.sound.add("wave", { volume });
+        let playCount = 0;
+
+        const playNext = () => {
+            playCount++;
+            const isFinalRepeat = playCount === GameScene.WAVE_SOUND_REPEAT_COUNT;
+
+            if (isFinalRepeat) {
+                instance.once(Phaser.Sound.Events.COMPLETE, () => instance.destroy());
+                instance.play();
+                this.tweens.add({
+                    targets: instance,
+                    volume: 0,
+                    duration: (instance.duration || 1) * 1000,
+                    ease: "Linear",
+                });
+                return;
+            }
+
+            instance.once(Phaser.Sound.Events.COMPLETE, playNext);
+            instance.play();
+        };
+
+        playNext();
+    }
+
     public playBubbleInSound() {
         const bubbleSound = get(bubbleSoundStore);
         this.playSound(`audio-webrtc-in-${bubbleSound}`);

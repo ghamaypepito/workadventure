@@ -126,7 +126,11 @@ export class InviteManager {
                     // Boosted past unity gain (2.0) - 0.15, 0.6, and 1.0 were all reported as
                     // still too quiet over ambient game/call audio. Web Audio GainNode accepts
                     // values above 1.0, so this doubles the sample's amplitude in software.
-                    scene.playSound(kind === "wave" ? "wave" : "ping-bell", 2.0);
+                    if (kind === "wave") {
+                        scene.playWaveSound(2.0);
+                    } else {
+                        scene.playSound("ping-bell", 2.0);
+                    }
                     // Deliberately does NOT also call sendDirectMessage here: requestSocialSignal()
                     // below already logs "👋 Waved"/"🔔 Pinged" once, from the sender's account, when
                     // the wave/ping is sent. Logging it again here - from the receiver's own account,
@@ -226,7 +230,11 @@ export class InviteManager {
         // from this one shared choke point, instead of each caller having to remember to do it.
         const scene = gameManager.getCurrentGameScene();
         if (scene) {
-            scene.playSound(kind === "wave" ? "wave" : "ping-bell", 2.0);
+            if (kind === "wave") {
+                scene.playWaveSound(2.0);
+            } else {
+                scene.playSound("ping-bell", 2.0);
+            }
             const chatID = scene.getRemotePlayersRepository().getPlayerByUuid(receiverUserUuid)?.chatID;
             if (chatID) {
                 const text = kind === "wave" ? "👋 Waved" : "🔔 Pinged";
