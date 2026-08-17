@@ -314,7 +314,13 @@ export class UploadController {
                         }
 
                         // Let's validate the archive
-                        const mapValidator = new MapValidator("error", new HttpFileFetcher(req.url));
+                        // req.url is only the path (e.g. "/vings-test/map.tmj"), not an absolute
+                        // URL - passing it straight to HttpFileFetcher makes every relative image
+                        // reference inside the map fail resolution (new URL() requires an
+                        // absolute base), so every tileset gets reported as "not loadable"
+                        // regardless of whether the file actually exists. getFullUrlFromRequest()
+                        // already builds the correct absolute URL elsewhere in this class.
+                        const mapValidator = new MapValidator("error", new HttpFileFetcher(this.getFullUrlFromRequest(req)));
 
                         let errors: Partial<OrganizedErrors> = {};
 
@@ -431,7 +437,9 @@ export class UploadController {
                 }
 
                 await limiter(async () => {
-                    const mapValidator = new MapValidator("error", new HttpFileFetcher(req.url));
+                    // See the same fix in putUpload() above for why req.url (a relative path)
+                    // can't be used as HttpFileFetcher's base URL.
+                    const mapValidator = new MapValidator("error", new HttpFileFetcher(this.getFullUrlFromRequest(req)));
 
                     let errors: Partial<OrganizedErrors> = {};
 
