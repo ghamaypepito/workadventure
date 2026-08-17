@@ -267,6 +267,18 @@ class ConnectionManager {
                         console.error(err.stack);
                     }
                 }
+                // A short link like "office.connectiumai.com/#Arham" (no room path, just a hash
+                // naming a start position/desk) hits this branch: it falls back to whatever room
+                // the user last visited, but was silently dropping the hash actually typed in the
+                // address bar in favor of that stored room's own (usually empty) hash - so the
+                // "start" area lookup in StartPositionCalculator never got the name it needed and
+                // the player spawned at the default position instead. If the current address bar
+                // actually has a hash, it's a deliberate deep link and should win.
+                if (window.location.hash) {
+                    const lastRoomPathUrl = new URL(roomPath);
+                    lastRoomPathUrl.hash = window.location.hash;
+                    roomPath = lastRoomPathUrl.toString();
+                }
             } else {
                 const query = urlParams.toString();
                 roomPath =
