@@ -87,21 +87,27 @@ const MEETING_INVITATION_REQUEST_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
  * History of getting this wrong by guessing a fixed multiplier instead of deriving it:
  * - 1.5x groupRadius (2026-08-11): not enough - kicks still observed regularly at 72-115 units
  *   against a 72-unit threshold, once WOKA_SPEED was tuned back up.
- * - 3x groupRadius (2026-08-12): safe at the WOKA_SPEED in use that day, but static again - the
- *   next WOKA_SPEED increase would silently make it insufficient exactly the same way.
+ * - 3x groupRadius + 4x WOKA_SPEED (2026-08-12): safe (192 units at groupRadius=48,
+ *   WOKA_SPEED=12), but reported as *too* generous on 2026-08-18 - group membership (and the
+ *   dynamically-stretching bubble sprite that renders it) persisted well after a user visibly
+ *   walked back to their desk, since the server hadn't yet crossed this wide a threshold.
+ * - 2x groupRadius + 3x WOKA_SPEED (2026-08-18): tightened to 132 units at the same settings -
+ *   still comfortably above the worst observed jitter-kick distance (115 units at
+ *   WOKA_SPEED 15-20), but noticeably closer to what a deliberate walk-away actually looks like.
+ *   Revert to 3x/4x if jitter-kicks reappear at this tighter setting.
  *
- * leaveRadius is now derived from the actual configured WOKA_SPEED (computeLeaveRadius below)
+ * leaveRadius is derived from the actual configured WOKA_SPEED (computeLeaveRadius below)
  * instead of a static multiplier, so raising movement speed automatically widens the hysteresis
- * with it - this class of bug shouldn't need a third manual re-tuning.
+ * with it.
  */
-const GROUP_LEAVE_RADIUS_BASE_MULTIPLIER = 3;
+const GROUP_LEAVE_RADIUS_BASE_MULTIPLIER = 2;
 /**
  * Extra leave-radius margin added per unit of WOKA_SPEED, on top of the base multiplier above.
  * Calibrated against production [distance-diag2] data from 2026-08-12 (kicks regularly at
- * 72-115 units, groupRadius=48, WOKA_SPEED in the 15-20 range that day) with headroom to spare,
- * so a future WOKA_SPEED increase grows the hysteresis instead of eroding it.
+ * 72-115 units, groupRadius=48, WOKA_SPEED in the 15-20 range that day), tightened on
+ * 2026-08-18 from 4x to 3x - see GROUP_LEAVE_RADIUS_BASE_MULTIPLIER history above.
  */
-const GROUP_LEAVE_RADIUS_PER_WOKA_SPEED_UNIT = 4;
+const GROUP_LEAVE_RADIUS_PER_WOKA_SPEED_UNIT = 3;
 
 /**
  * Sane defaults for WOKA_SPEED (must match play/pusher's own default) — used only as a fallback

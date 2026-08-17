@@ -85,7 +85,7 @@ describe("GameRoom", () => {
             emote,
             () => {},
             () => {},
-            () => {}
+            () => {},
         );
 
         const user1Socket = createMockUserSocket();
@@ -125,7 +125,7 @@ describe("GameRoom", () => {
             emote,
             () => {},
             () => {},
-            () => {}
+            () => {},
         );
 
         const user1Socket = createMockUserSocket();
@@ -170,7 +170,7 @@ describe("GameRoom", () => {
             emote,
             () => {},
             () => {},
-            () => {}
+            () => {},
         );
 
         const user1Socket = createMockUserSocket();
@@ -183,7 +183,7 @@ describe("GameRoom", () => {
         expect(disconnectCallNumber).toBe(0);
 
         // groupRadius is 160 here; no wokaSpeed is passed so it defaults to 9, giving
-        // leaveRadius = 160*3 + 9*4 = 516 as hysteresis against jitter, so the displacement must
+        // leaveRadius = 160*2 + 9*3 = 347 as hysteresis against jitter, so the displacement must
         // clear that larger radius.
         world.updatePosition(user2, new Point(1213, 100));
 
@@ -212,7 +212,7 @@ describe("GameRoom", () => {
             emote,
             () => {},
             () => {},
-            () => {}
+            () => {},
         );
 
         const user1Socket = createMockUserSocket();
@@ -223,7 +223,7 @@ describe("GameRoom", () => {
 
         // Barycenter is (179.5, 100). Moving user2 to 490 puts the barycenter's distance to each
         // member at 195 - past groupRadius (160), matching production jitter, but still inside
-        // leaveRadius (516, using the default wokaSpeed of 9), so nobody should be kicked out and
+        // leaveRadius (347, using the default wokaSpeed of 9), so nobody should be kicked out and
         // no brand-new LiveKit room forced.
         world.updatePosition(user2, new Point(490, 100));
 
@@ -238,8 +238,8 @@ describe("GameRoom", () => {
         };
 
         // Same groupRadius as the tests above (160), but a much higher wokaSpeed (50 - the exact
-        // misconfigured production value from 2026-08-11) so leaveRadius = 160*3 + 50*4 = 680,
-        // well past the 516 the default wokaSpeed would give.
+        // misconfigured production value from 2026-08-11) so leaveRadius = 160*2 + 50*3 = 470,
+        // well past the 347 the default wokaSpeed would give.
         const world = await GameRoom.create(
             "https://play.workadventu.re/_/global/localhost/test.json",
             connect,
@@ -253,7 +253,7 @@ describe("GameRoom", () => {
             () => {},
             () => {},
             () => {},
-            50
+            50,
         );
 
         const user1Socket = createMockUserSocket();
@@ -262,9 +262,9 @@ describe("GameRoom", () => {
         const user2Socket = createMockUserSocket();
         const user2 = await world.join(user2Socket.socket, createJoinRoomMessage("2", 259, 100));
 
-        // Distance-to-barycenter here is 558.5 - well past the default-wokaSpeed leaveRadius
-        // (516) that the earlier test asserted a kick at, but still inside this room's 680.
-        world.updatePosition(user2, new Point(1217, 100));
+        // Distance-to-barycenter here is 400 - well past the default-wokaSpeed leaveRadius
+        // (347) that the earlier test asserted a kick at, but still inside this room's 470.
+        world.updatePosition(user2, new Point(900, 100));
 
         expect(disconnectCallNumber).toBe(0);
     });
@@ -282,7 +282,7 @@ describe("GameRoom", () => {
             emote,
             () => {},
             () => {},
-            () => {}
+            () => {},
         );
 
         const firstSocket = createMockUserSocket();
@@ -291,7 +291,7 @@ describe("GameRoom", () => {
         const secondSocket = createMockUserSocket();
         const reconnectedUser = await world.join(
             secondSocket.socket,
-            createJoinRoomMessage("duplicate-user", 100, 100, "tab-1")
+            createJoinRoomMessage("duplicate-user", 100, 100, "tab-1"),
         );
 
         expect(firstSocket.end).toHaveBeenCalledTimes(1);
@@ -314,7 +314,7 @@ describe("GameRoom", () => {
             emote,
             () => {},
             () => {},
-            () => {}
+            () => {},
         );
 
         const firstSocket = createMockUserSocket();
@@ -323,7 +323,7 @@ describe("GameRoom", () => {
         const secondSocket = createMockUserSocket();
         const secondUser = await world.join(
             secondSocket.socket,
-            createJoinRoomMessage("duplicate-user", 100, 100, "tab-2")
+            createJoinRoomMessage("duplicate-user", 100, 100, "tab-2"),
         );
 
         expect(firstSocket.end).not.toHaveBeenCalled();
@@ -346,7 +346,7 @@ describe("GameRoom", () => {
             emote,
             () => {},
             () => {},
-            () => {}
+            () => {},
         );
 
         const firstSocket = createMockUserSocket();
