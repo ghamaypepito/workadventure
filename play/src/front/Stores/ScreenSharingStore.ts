@@ -7,7 +7,7 @@ import type { VideoQualitySetting } from "../Connection/LocalUserStore";
 import LL from "../../i18n/i18n-svelte";
 import type { Streamable, WebRtcStreamable } from "../Space/Streamable";
 import { VideoBox } from "../Space/VideoBox";
-import { isSpeakerStore, type LocalStreamStoreValue } from "./MediaStore";
+import { isSpeakerStore, requestedCameraState, type LocalStreamStoreValue } from "./MediaStore";
 import { inExternalServiceStore, myCameraStore, myMicrophoneStore } from "./MyMediaStore";
 import type {} from "../Api/Desktop";
 import { screenShareStreamElementsStore } from "./PeerStore";
@@ -236,6 +236,18 @@ export const screenSharingLocalStreamStore = derived<Readable<MediaStreamConstra
                 }
 
                 currentStream = stream;
+
+                // Screen share (AV1) encoding alongside camera (VP9) encoding and the game's
+                // own rendering can overload lower-power machines badly enough to miss LiveKit's
+                // signaling heartbeat, forcing a full reconnect mid-call - confirmed live via a
+                // user's session: camera bitrate/fps dropped to 0 and screen-share packet loss
+                // spiked to 60-80% at the exact moment the browser logged sustained main-thread
+                // violations. Freeing up the camera encoder removes one of the three simultaneous
+                // loads. This only turns the camera off automatically when sharing starts; the
+                // user can turn it back on manually if they want both and their machine can take it.
+                if (get(requestedCameraState)) {
+                    requestedCameraState.disableWebcam();
+                }
 
                 // If stream ends (for instance if user clicks the stop screen sharing button in the browser), let's close the view
                 for (const track of currentStream.getTracks()) {
