@@ -75,6 +75,17 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
     private globalStartTime = performance.now();
     // Track the last timestamp to guarantee strict monotonic increase
     private lastTimestampMicroseconds = 0;
+    // Circuit breaker: reported live (2026-08-18) as the whole game freezing during a call,
+    // only recoverable via a restart. Confirmed via a user's browser console: segmentForVideo()
+    // was throwing the same "Packet timestamp mismatch" error over 1000 times in a row - once
+    // MediaPipe's internal graph gets into this state it never recovers on its own, so retrying
+    // forever (the previous behavior) just spins, hammering the CPU with WASM calls and
+    // console.error output indefinitely. After a small number of consecutive failures, stop
+    // calling into the graph entirely and fall back to passing the raw camera frame straight
+    // through (no blur) instead - video keeps flowing and the tab stays responsive.
+    private consecutiveSegmentationErrors = 0;
+    private static readonly MAX_CONSECUTIVE_SEGMENTATION_ERRORS = 5;
+    private segmentationDisabledAfterErrors = false;
 
     // Canvas for background image (pre-rendered to avoid GPU re-upload each frame)
     private backgroundCanvas: HTMLCanvasElement | null = null;
@@ -253,6 +264,22 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
             return;
         }
 
+        if (this.segmentationDisabledAfterErrors) {
+            // The MediaPipe graph got into an unrecoverable state (see
+            // MAX_CONSECUTIVE_SEGMENTATION_ERRORS above) - pass the raw frame straight through
+            // instead of calling into it again, so video keeps flowing without the effect.
+            const { width, height } = this.outputCanvas;
+            this.outputCtx.drawImage(this.inputVideo, 0, 0, width, height);
+            if (this.gl) {
+                this.gl.flush();
+            }
+            if (this.timeoutId) {
+                clearTimeout(this.timeoutId);
+            }
+            this.timeoutId = setTimeout(() => this.processFrame(), this.frameRate);
+            return;
+        }
+
         try {
             // Calculate timestamp in microseconds (MediaPipe requires microseconds)
             // Use a global timestamp that never resets to ensure strict monotonic increase
@@ -274,6 +301,7 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
                 this.processResults(result.confidenceMasks[0]);
             }
             // Silently skip if no mask - this can happen occasionally and is not critical
+            this.consecutiveSegmentationErrors = 0;
 
             // Schedule next frame
             if (this.timeoutId) {
@@ -281,7 +309,19 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
             }
             this.timeoutId = setTimeout(() => this.processFrame(), this.frameRate);
         } catch (error) {
-            console.error("[MediaPipe Tasks Vision] : ", error);
+            this.consecutiveSegmentationErrors++;
+            if (
+                this.consecutiveSegmentationErrors >=
+                MediaPipeTasksVisionTransformer.MAX_CONSECUTIVE_SEGMENTATION_ERRORS
+            ) {
+                this.segmentationDisabledAfterErrors = true;
+                console.error(
+                    `[MediaPipe Tasks Vision] segmentForVideo failed ${this.consecutiveSegmentationErrors} times in a row - the graph is stuck and won't recover, disabling the background effect for the rest of this session and passing the raw frame through instead:`,
+                    error,
+                );
+            } else {
+                console.error("[MediaPipe Tasks Vision] : ", error);
+            }
             this.timeoutId = setTimeout(() => this.processFrame(), this.frameRate);
             return;
         }
@@ -613,7 +653,9 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
                 resizeListener = () => resolve();
                 this.inputVideo.addEventListener("resize", resizeListener, { once: true });
             });
-            const timeout = new Promise<void>((resolve) => setTimeout(resolve, 1000));
+            const timeout = new Promise<void>((resolve) => {
+                setTimeout(resolve, 1000);
+            });
             try {
                 await raceAbort(Promise.race([dimensionsBecameValid, timeout]), signal);
             } finally {
