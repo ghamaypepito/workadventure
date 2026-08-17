@@ -49,9 +49,13 @@ class LocalFileFetcher implements FileFetcherInterface {
         private mapVirtualPath: string,
     ) {}
 
-    fileExists(filePath: string): Promise<boolean> {
+    async fileExists(filePath: string): Promise<boolean> {
         const resolvedPath = path.normalize(`${path.dirname(this.mapVirtualPath)}/${filePath}`);
-        return this.fileSystem.exist(resolvedPath);
+        const result = await this.fileSystem.exist(resolvedPath);
+        // TEMP DIAGNOSTIC (2026-08-17): local-filesystem check is still failing for all
+        // tilesets - logging the exact resolved path and result to see why. Remove once confirmed.
+        console.info(`[local-file-fetcher-diag] mapVirtualPath=${this.mapVirtualPath} filePath=${filePath} resolvedPath=${resolvedPath} exists=${result}`);
+        return result;
     }
 }
 
