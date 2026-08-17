@@ -54,5 +54,8 @@ export class TextUtils {
 
         const textElem = scene.add.text(object.x, object.y, object.text.text, options);
         textElem.setAngle(object.rotation);
+        if (object.opacity !== undefined) {
+            textElem.setAlpha(object.opacity);
+        }
     }
 }
