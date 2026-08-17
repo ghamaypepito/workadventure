@@ -25,9 +25,17 @@ export class Game extends Phaser.Game {
     private _isDirty = false;
     private isChatVisible = false;
     private lastRenderTime = 0;
+    private chatVisibilityStoreUnsubscribe: () => void;
 
     constructor(GameConfig: Phaser.Types.Core.GameConfig) {
         super(GameConfig);
+
+        // TEMP DIAGNOSTIC (2026-08-18): reports of the whole game canvas going black during
+        // a call, only recoverable via a full app restart - the game has no handling at all
+        // for its own WebGL context being lost, so if this fires, that's the direct cause.
+        // Remove once confirmed.
+        this.canvas.addEventListener("webglcontextlost", this.handleWebGlContextLost);
+        this.canvas.addEventListener("webglcontextrestored", this.handleWebGlContextRestored);
 
         this.scale.on(Phaser.Scale.Events.RESIZE, () => {
             for (const scene of this.scene.getScenes(true)) {
@@ -37,9 +45,24 @@ export class Game extends Phaser.Game {
             }
         });
 
-        chatVisibilityStore.subscribe((visible) => {
+        this.chatVisibilityStoreUnsubscribe = chatVisibilityStore.subscribe((visible) => {
             this.isChatVisible = visible;
         });
+    }
+
+    private readonly handleWebGlContextLost = (event: Event): void => {
+        console.error("[webgl-context-diag] main game canvas lost its WebGL context", event);
+    };
+
+    private readonly handleWebGlContextRestored = (): void => {
+        console.info("[webgl-context-diag] main game canvas WebGL context restored");
+    };
+
+    public destroy(removeCanvas: boolean, noReturn?: boolean): void {
+        this.canvas.removeEventListener("webglcontextlost", this.handleWebGlContextLost);
+        this.canvas.removeEventListener("webglcontextrestored", this.handleWebGlContextRestored);
+        this.chatVisibilityStoreUnsubscribe();
+        super.destroy(removeCanvas, noReturn);
     }
 
     public step(time: number, delta: number) {

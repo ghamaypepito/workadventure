@@ -221,6 +221,13 @@ void main() {
 }
 `;
 
+// TEMP DIAGNOSTIC (2026-08-18): investigating reports of the game's WebGL context being
+// lost (whole canvas goes black) after extended use in proximity/conference calls. Each
+// pipeline instance owns its own WebGL context (for ownsContext:true, i.e. CanvasBlurRenderer's
+// usage), so if these aren't being closed reliably on camera stop/restart, this count would
+// climb unboundedly toward the browser's concurrent-WebGL-context limit. Remove once confirmed.
+let liveWebGlBlurPipelineCount = 0;
+
 export class WebGlBlurPipeline {
     private downsampleProgram: WebGLProgram | null = null;
     private upsampleProgram: WebGLProgram | null = null;
@@ -253,6 +260,7 @@ export class WebGlBlurPipeline {
     private maskAlphaWeightLocation: WebGLUniformLocation | null = null;
     private maskTexelSizeLocation: WebGLUniformLocation | null = null;
     private contextLost = false;
+    private closed = false;
 
     private readonly canvas: HTMLCanvasElement;
     private readonly gl: WebGlBlurContext;
@@ -280,6 +288,11 @@ export class WebGlBlurPipeline {
             this.canvas.addEventListener("webglcontextlost", this.handleContextLost, false);
             this.canvas.addEventListener("webglcontextrestored", this.handleContextRestored, false);
         }
+
+        liveWebGlBlurPipelineCount++;
+        console.info(
+            `[webgl-context-diag] WebGlBlurPipeline created (ownsContext=${this.ownsContext}), live count=${liveWebGlBlurPipelineCount}`,
+        );
     }
 
     public drawBlurredImage(
@@ -426,6 +439,12 @@ export class WebGlBlurPipeline {
         if (this.ownsContext) {
             this.canvas.width = 0;
             this.canvas.height = 0;
+        }
+
+        if (!this.closed) {
+            this.closed = true;
+            liveWebGlBlurPipelineCount--;
+            console.info(`[webgl-context-diag] WebGlBlurPipeline closed, live count=${liveWebGlBlurPipelineCount}`);
         }
     }
 
