@@ -604,6 +604,24 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
     }
 
     public async transform(inputStream: MediaStream, signal?: AbortSignal): Promise<MediaStream> {
+        // Cancel any still-pending frame from a previous processing loop before this method's
+        // first await - not after, as it used to be done further down. This method awaits
+        // several real-time steps below (video metadata, playback start, sometimes up to a
+        // second waiting for valid dimensions) before it used to reach that clearTimeout call,
+        // and this.inputVideo.srcObject is reassigned synchronously just below, immediately
+        // visible to any old loop iteration still in flight. If a stale processFrame() callback
+        // fired during that window, it would call into MediaPipe against the already-swapped
+        // video element using a timestamp that could race the new loop this call starts once
+        // it finishes - which is exactly the kind of interleaving that produces the "packet
+        // timestamp mismatch" errors that wedge the graph and required the circuit breaker
+        // above. This runs on every camera restart, which - as of 82bfb39 - is now every single
+        // proximity/conference join instead of once per session, making that race far likelier
+        // to actually get hit.
+        if (this.timeoutId) {
+            clearTimeout(this.timeoutId);
+            this.timeoutId = null;
+        }
+
         this.frameRate = inputStream.getVideoTracks()[0]?.getSettings().frameRate || 33;
         await this.initPromise;
         if (signal?.aborted) {
@@ -697,13 +715,6 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
         // Don't reset timestamp - keep it monotonic across stream changes
         // MediaPipe requires strictly increasing timestamps, so we use a global timestamp
         // that never resets
-
-        // Stop any existing processing loop before starting a new one
-        // This prevents race conditions when transform() is called multiple times
-        if (this.timeoutId) {
-            clearTimeout(this.timeoutId);
-            this.timeoutId = null;
-        }
 
         // Start processing loop
         this.processFrame();
