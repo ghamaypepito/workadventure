@@ -13,7 +13,7 @@ import type { OrganizedErrors } from "@workadventure/map-editor/src/GameMap/MapV
 import { MapValidator } from "@workadventure/map-editor/src/GameMap/MapValidator";
 import { WAMFileFormat } from "@workadventure/map-editor";
 import { ZipFileFetcher } from "@workadventure/map-editor/src/GameMap/Validator/ZipFileFetcher";
-import { HttpFileFetcher } from "@workadventure/map-editor/src/GameMap/Validator/HttpFileFetcher";
+import type { FileFetcherInterface } from "@workadventure/map-editor/src/GameMap/Validator/FileFetcherInterface";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import { generateErrorMessage } from "zod-error";
 import * as Sentry from "@sentry/node";
@@ -31,6 +31,29 @@ import type { FileSystemInterface } from "./FileSystemInterface";
 import { FileNotFoundError } from "./FileNotFoundError";
 
 const limit = pLimit(10);
+
+/**
+ * Checks tileset/image references against the local map-storage filesystem instead of
+ * over HTTP. HttpFileFetcher makes the service call its own public URL (e.g. via
+ * axios.head against map-storage-production.up.railway.app) to check each referenced
+ * image - that self-referential outbound call fails inside Railway's network even
+ * though the same URL is reachable from outside, so every tileset was reported
+ * "not loadable" regardless of whether the file actually existed. The files being
+ * validated were just written to (or already exist on) this service's own storage, so
+ * checking them directly via FileSystemInterface is both correct and avoids the
+ * self-call entirely.
+ */
+class LocalFileFetcher implements FileFetcherInterface {
+    constructor(
+        private fileSystem: FileSystemInterface,
+        private mapVirtualPath: string,
+    ) {}
+
+    fileExists(filePath: string): Promise<boolean> {
+        const resolvedPath = path.normalize(`${path.dirname(this.mapVirtualPath)}/${filePath}`);
+        return this.fileSystem.exist(resolvedPath);
+    }
+}
 
 const upload = multer({
     storage: multer.diskStorage({}),
@@ -314,23 +337,12 @@ export class UploadController {
                         }
 
                         // Let's validate the archive
-                        // req.url is only the path (e.g. "/vings-test/map.tmj"), not an absolute
-                        // URL - passing it straight to HttpFileFetcher makes every relative image
-                        // reference inside the map fail resolution (new URL() requires an
-                        // absolute base), so every tileset gets reported as "not loadable"
-                        // regardless of whether the file actually exists. getFullUrlFromRequest()
-                        // already builds the correct absolute URL elsewhere in this class.
-                        const fullUrl = this.getFullUrlFromRequest(req);
-                        // TEMP DIAGNOSTIC (2026-08-17): the fix above didn't resolve the upload
-                        // rejection - logging the actual computed URL and the raw request info it
-                        // was built from to see what's really being sent to HttpFileFetcher.
-                        // Remove once confirmed.
-                        console.info(
-                            `[upload-url-diag] fullUrl=${fullUrl} protocol=${req.protocol} hostname=${req.hostname} ` +
-                                `x-forwarded-proto=${req.header("x-forwarded-proto")} x-forwarded-host=${req.header("x-forwarded-host")} ` +
-                                `x-forwarded-prefix=${req.header("x-forwarded-prefix")} originalUrl=${req.originalUrl}`,
+                        // Check referenced tileset images against this service's own local
+                        // storage rather than over HTTP - see LocalFileFetcher above for why.
+                        const mapValidator = new MapValidator(
+                            "error",
+                            new LocalFileFetcher(this.fileSystem, virtualPath),
                         );
-                        const mapValidator = new MapValidator("error", new HttpFileFetcher(fullUrl));
 
                         let errors: Partial<OrganizedErrors> = {};
 
@@ -447,9 +459,11 @@ export class UploadController {
                 }
 
                 await limiter(async () => {
-                    // See the same fix in putUpload() above for why req.url (a relative path)
-                    // can't be used as HttpFileFetcher's base URL.
-                    const mapValidator = new MapValidator("error", new HttpFileFetcher(this.getFullUrlFromRequest(req)));
+                    // See LocalFileFetcher above for why this checks local storage instead of HTTP.
+                    const mapValidator = new MapValidator(
+                        "error",
+                        new LocalFileFetcher(this.fileSystem, virtualPath),
+                    );
 
                     let errors: Partial<OrganizedErrors> = {};
 
