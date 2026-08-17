@@ -320,7 +320,17 @@ export class UploadController {
                         // absolute base), so every tileset gets reported as "not loadable"
                         // regardless of whether the file actually exists. getFullUrlFromRequest()
                         // already builds the correct absolute URL elsewhere in this class.
-                        const mapValidator = new MapValidator("error", new HttpFileFetcher(this.getFullUrlFromRequest(req)));
+                        const fullUrl = this.getFullUrlFromRequest(req);
+                        // TEMP DIAGNOSTIC (2026-08-17): the fix above didn't resolve the upload
+                        // rejection - logging the actual computed URL and the raw request info it
+                        // was built from to see what's really being sent to HttpFileFetcher.
+                        // Remove once confirmed.
+                        console.info(
+                            `[upload-url-diag] fullUrl=${fullUrl} protocol=${req.protocol} hostname=${req.hostname} ` +
+                                `x-forwarded-proto=${req.header("x-forwarded-proto")} x-forwarded-host=${req.header("x-forwarded-host")} ` +
+                                `x-forwarded-prefix=${req.header("x-forwarded-prefix")} originalUrl=${req.originalUrl}`,
+                        );
+                        const mapValidator = new MapValidator("error", new HttpFileFetcher(fullUrl));
 
                         let errors: Partial<OrganizedErrors> = {};
 
