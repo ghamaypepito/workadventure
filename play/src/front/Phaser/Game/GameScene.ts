@@ -1187,13 +1187,21 @@ export class GameScene extends DirtyScene {
             const isFinalRepeat = playCount === GameScene.WAVE_SOUND_REPEAT_COUNT;
 
             if (isFinalRepeat) {
-                instance.once(Phaser.Sound.Events.COMPLETE, () => instance.destroy());
                 instance.play();
+                // Destroy once the fade-out tween itself completes, not on the sound's own
+                // COMPLETE event - that event and the tween are both timed off
+                // instance.duration and can fire within a frame of each other, so relying on
+                // COMPLETE to destroy the instance races the tween's still-pending final
+                // update, which then throws trying to set .volume on an already-destroyed
+                // sound - uncaught inside Phaser's own game loop, which has no recovery from
+                // that and permanently freezes the whole game (movement, clicks, everything)
+                // until the page is reloaded.
                 this.tweens.add({
                     targets: instance,
                     volume: 0,
                     duration: (instance.duration || 1) * 1000,
                     ease: "Linear",
+                    onComplete: () => instance.destroy(),
                 });
                 return;
             }

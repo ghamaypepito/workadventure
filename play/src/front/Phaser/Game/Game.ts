@@ -72,6 +72,21 @@ export class Game extends Phaser.Game {
             return this.runDestroy();
         }
 
+        // An uncaught exception anywhere in this method (scene update, a plugin, a tween
+        // callback, ...) used to propagate straight out of Phaser's requestAnimationFrame
+        // loop with nothing catching it - which doesn't just skip a frame, it kills the loop
+        // outright, permanently freezing the whole game (movement, clicks, rendering) until
+        // the page is reloaded. One such bug (a fade tween racing a sound's own destroy) hit
+        // production on 2026-08-18. Catching here means a future bug like that drops a frame
+        // and gets logged instead of taking the whole game down.
+        try {
+            this.stepInternal(time, delta);
+        } catch (e) {
+            console.error("[game-step-diag] uncaught error in Game.step(), frame skipped:", e);
+        }
+    }
+
+    private stepInternal(time: number, delta: number) {
         const eventEmitter = this.events;
 
         //  Global Managers like Input and Sound update in the prestep
