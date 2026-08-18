@@ -92,22 +92,30 @@ const MEETING_INVITATION_REQUEST_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
  *   dynamically-stretching bubble sprite that renders it) persisted well after a user visibly
  *   walked back to their desk, since the server hadn't yet crossed this wide a threshold.
  * - 2x groupRadius + 3x WOKA_SPEED (2026-08-18): tightened to 132 units at the same settings -
- *   still comfortably above the worst observed jitter-kick distance (115 units at
- *   WOKA_SPEED 15-20), but noticeably closer to what a deliberate walk-away actually looks like.
- *   Revert to 3x/4x if jitter-kicks reappear at this tighter setting.
+ *   on paper still above the worst *previously* observed jitter-kick distance (115 units), but
+ *   with the safety margin cut from ~1.67x down to ~1.15x. Within a day, production reports came
+ *   back in of audio breaking constantly - proximity groups thrashing (dissolve/reform every few
+ *   seconds, each minting a brand-new LiveKit room and forcing a full reconnect) is exactly the
+ *   2026-08-12 failure mode, just needing slightly less jitter to retrigger now that the margin
+ *   was thin. Reverted same-day back to 3x/4x per the revert plan already noted here.
+ *
+ * If a smaller-looking bubble is wanted again, don't retighten this constant - it's the
+ * anti-thrashing margin, not a cosmetic radius. Shrink groupRadius/the join threshold instead,
+ * which doesn't touch the gap this hysteresis needs to absorb movement jitter.
  *
  * leaveRadius is derived from the actual configured WOKA_SPEED (computeLeaveRadius below)
  * instead of a static multiplier, so raising movement speed automatically widens the hysteresis
  * with it.
  */
-const GROUP_LEAVE_RADIUS_BASE_MULTIPLIER = 2;
+const GROUP_LEAVE_RADIUS_BASE_MULTIPLIER = 3;
 /**
  * Extra leave-radius margin added per unit of WOKA_SPEED, on top of the base multiplier above.
  * Calibrated against production [distance-diag2] data from 2026-08-12 (kicks regularly at
- * 72-115 units, groupRadius=48, WOKA_SPEED in the 15-20 range that day), tightened on
- * 2026-08-18 from 4x to 3x - see GROUP_LEAVE_RADIUS_BASE_MULTIPLIER history above.
+ * 72-115 units, groupRadius=48, WOKA_SPEED in the 15-20 range that day) - see
+ * GROUP_LEAVE_RADIUS_BASE_MULTIPLIER history above for why this reverted from a 2026-08-18 dip
+ * to 3x back to 4x the same day.
  */
-const GROUP_LEAVE_RADIUS_PER_WOKA_SPEED_UNIT = 3;
+const GROUP_LEAVE_RADIUS_PER_WOKA_SPEED_UNIT = 4;
 
 /**
  * Sane defaults for WOKA_SPEED (must match play/pusher's own default) — used only as a fallback
