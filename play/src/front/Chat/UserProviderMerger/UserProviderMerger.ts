@@ -31,7 +31,15 @@ export class UserProviderMerger {
                     for (const user of usersList) {
                         const uniqueId = (user.chatId as ChatId) ?? (user.uuid as UserUuid);
                         if (!uniqueId) {
-                            throw new Error("Impossible. A user must have at least a chatId or a uuid.");
+                            // A user can transiently show up here with neither field set yet (e.g. their
+                            // space-user record hasn't finished syncing right after joining). Throwing used
+                            // to abort this whole derived store's recomputation - and because Svelte doesn't
+                            // isolate one subscriber's failure from the rest of a store's notify loop, that
+                            // one incomplete record could wedge chat/user-list reactivity for every user in
+                            // the room (e.g. getting stuck unable to navigate away from Proximity Chat).
+                            // Skip just this entry instead so everyone else's data still comes through.
+                            console.warn("Skipping a user with neither chatId nor uuid", user);
+                            continue;
                         }
                         const chatUserList = usersByChatId.get(uniqueId);
                         if (!chatUserList) {
