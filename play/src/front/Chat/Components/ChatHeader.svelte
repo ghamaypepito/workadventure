@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onDestroy } from "svelte";
-    import { chatInputFocusStore } from "../../Stores/ChatStore";
+    import { chatInputFocusStore, chatVisibilityStore } from "../../Stores/ChatStore";
     let searchActive = $state(false);
     import { chatSearchBarValue, navChat, joignableRoom } from "../Stores/ChatStore";
     import LoadingSmall from "../images/loading-small.svelte";
@@ -12,7 +12,7 @@
     import { hasMatrixChatCapabilities } from "../Connection/ChatConnection";
     import OnlineUsersCount from "./OnlineUsersCount.svelte";
     import ChatActionMenu from "./ChatActionMenu.svelte";
-    import { IconMessageCircle2, IconUsers } from "@wa-icons";
+    import { IconMessageCircle2, IconUsers, IconX } from "@wa-icons";
 
     const gameScene = gameManager.getCurrentGameScene();
     const chat = gameManager.chatConnection;
@@ -128,6 +128,22 @@
             matrixChatConnection={hasMatrixChatCapabilities(chat) ? chat : undefined}
             onToggleSearch={handleToggleSearch}
         />
+    </div>
+    <!-- Always-visible close button - ChatActionMenu's own close entry only renders once the
+    sidebar is nearly full-width (hasCloseChat) or inside a specific discussion, so at normal
+    desktop widths on the room list there was no visible way to close the chat at all (Escape/"C"
+    still worked, but had no on-screen affordance). This is independent of that logic so there's
+    always a way out. -->
+    <div class={searchActive ? "hidden" : ""}>
+        <button
+            class="p-3 hover:bg-white/10 rounded aspect-square w-12 h-12 !text-white"
+            onclick={() => chatVisibilityStore.set(false)}
+            aria-label={$LL.chat.closeChat()}
+            title={$LL.chat.closeChat()}
+            data-testid="closeChatHeaderButton"
+        >
+            <IconX font-size="20" />
+        </button>
     </div>
     <!-- searchbar -->
     {#if searchActive && ($navChat.key === "users" || $chatStatusStore !== "OFFLINE")}
