@@ -628,7 +628,14 @@ export class GameScene extends DirtyScene {
     }
 
     public getCustomEntityCollectionUrl() {
-        const mapStoragePath = `${PUBLIC_MAP_STORAGE_PREFIX}${ENTITIES_FOLDER_PATH_NO_PREFIX}/${ENTITY_COLLECTION_FILE}`;
+        // PUBLIC_MAP_STORAGE_PREFIX can arrive as "", "/", or "/some/prefix" depending on how
+        // PUBLIC_MAP_STORAGE_URL was configured - naively concatenating it straight onto
+        // ENTITIES_FOLDER_PATH_NO_PREFIX silently produced URLs like ".../railway.appassets/..."
+        // (missing the separating slash) whenever the prefix didn't already end in one, which
+        // broke entity icon loading. Stripping any trailing slash and always inserting exactly
+        // one guarantees a well-formed path regardless of what the prefix looks like.
+        const prefix = (PUBLIC_MAP_STORAGE_PREFIX ?? "").replace(/\/$/, "");
+        const mapStoragePath = `${prefix}/${ENTITIES_FOLDER_PATH_NO_PREFIX}/${ENTITY_COLLECTION_FILE}`;
         return new URL(mapStoragePath, this.wamUrlFile).toString();
     }
 
