@@ -38,7 +38,7 @@ EXPOSE 3000 50053
 WORKDIR /usr/src
 ENV STORAGE_DIRECTORY=/maps
 RUN mkdir /maps && chown node:node /maps
-RUN apt-get update && apt-get install -y git curl
+RUN apt-get update && apt-get install -y git curl gosu
 COPY package.json package-lock.json ./
 COPY map-storage/package.json map-storage/package.json
 COPY libs/messages/package.json libs/messages/package.json
@@ -53,9 +53,14 @@ COPY --from=proto-builder /usr/libs/messages/src ./libs/messages/src
 COPY --from=builder /usr/src/map-storage/dist-ui ./map-storage/dist-ui
 COPY --chown=node:node map-storage map-storage
 RUN chown node:node -R /usr/src/map-storage
+COPY map-storage/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 WORKDIR /usr/src/map-storage
 RUN mkdir ./dist
 
 HEALTHCHECK --interval=5s --timeout=10s --start-period=5s --retries=10 CMD curl -f http://localhost:3000/ping || exit 1
-USER node
+# Stays root at container start (not "USER node") so the entrypoint can fix ownership on
+# whatever actually got mounted at $STORAGE_DIRECTORY before dropping to "node" via gosu - see
+# docker-entrypoint.sh for why.
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["npm", "run", "start"]
