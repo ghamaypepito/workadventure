@@ -86,6 +86,21 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
     private consecutiveSegmentationErrors = 0;
     private static readonly MAX_CONSECUTIVE_SEGMENTATION_ERRORS = 5;
     private segmentationDisabledAfterErrors = false;
+    // Guards against two overlapping transform() calls both ending up with a live processFrame()
+    // loop at once. The previous fix only cancelled a *stale* loop before starting a *new* one
+    // sequentially - it did nothing for two transform() calls genuinely in flight at the same
+    // time (e.g. two proximity/conference joins firing close together, which - since camera
+    // restarts now happen on every join instead of once per session - is a real path here).
+    // In that case each call clears this.timeoutId independently and both can end up scheduling
+    // their own processFrame() chain, so the "cancel the old timer" approach can't reliably stop
+    // either one: whichever call's timer callback is already executing when the other clears
+    // this.timeoutId just reschedules itself anyway. Both loops then call segmentForVideo() with
+    // their own independently-tracked timestamps against the same shared MediaPipe graph -
+    // exactly the interleaving that produces "packet timestamp mismatch" and wedges it. Every
+    // transform() call takes a new generation number, and every processFrame() invocation checks
+    // it still belongs to the current one before doing anything - a stale loop goes inert on its
+    // very next tick instead of racing the current one, regardless of timer-cancellation timing.
+    private currentGeneration = 0;
 
     // Canvas for background image (pre-rendered to avoid GPU re-upload each frame)
     private backgroundCanvas: HTMLCanvasElement | null = null;
@@ -227,7 +242,14 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
         }
     }
 
-    private processFrame(): void {
+    private processFrame(generation: number): void {
+        if (generation !== this.currentGeneration) {
+            // A newer transform() call has taken over since this loop iteration was scheduled -
+            // go inert instead of rescheduling, so this stale loop can never call into MediaPipe
+            // alongside the current one. See currentGeneration's declaration for why this exists.
+            return;
+        }
+
         if (this.closed || !this.outputStream || this.config.mode === "none" || !this.imageSegmenter) {
             return;
         }
@@ -239,7 +261,7 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
             if (this.timeoutId) {
                 clearTimeout(this.timeoutId);
             }
-            this.timeoutId = setTimeout(() => this.processFrame(), this.frameRate);
+            this.timeoutId = setTimeout(() => this.processFrame(generation), this.frameRate);
             return;
         }
 
@@ -251,7 +273,7 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
             if (this.timeoutId) {
                 clearTimeout(this.timeoutId);
             }
-            this.timeoutId = setTimeout(() => this.processFrame(), this.frameRate);
+            this.timeoutId = setTimeout(() => this.processFrame(generation), this.frameRate);
             return;
         }
 
@@ -260,7 +282,7 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
             if (this.timeoutId) {
                 clearTimeout(this.timeoutId);
             }
-            this.timeoutId = setTimeout(() => this.processFrame(), this.frameRate);
+            this.timeoutId = setTimeout(() => this.processFrame(generation), this.frameRate);
             return;
         }
 
@@ -276,7 +298,7 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
             if (this.timeoutId) {
                 clearTimeout(this.timeoutId);
             }
-            this.timeoutId = setTimeout(() => this.processFrame(), this.frameRate);
+            this.timeoutId = setTimeout(() => this.processFrame(generation), this.frameRate);
             return;
         }
 
@@ -307,7 +329,7 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
             if (this.timeoutId) {
                 clearTimeout(this.timeoutId);
             }
-            this.timeoutId = setTimeout(() => this.processFrame(), this.frameRate);
+            this.timeoutId = setTimeout(() => this.processFrame(generation), this.frameRate);
         } catch (error) {
             this.consecutiveSegmentationErrors++;
             if (
@@ -322,7 +344,7 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
             } else {
                 console.error("[MediaPipe Tasks Vision] : ", error);
             }
-            this.timeoutId = setTimeout(() => this.processFrame(), this.frameRate);
+            this.timeoutId = setTimeout(() => this.processFrame(generation), this.frameRate);
             return;
         }
     }
@@ -621,11 +643,19 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
             clearTimeout(this.timeoutId);
             this.timeoutId = null;
         }
+        // Mints a generation for this call before any await below. Any other transform() call
+        // that starts later takes a higher number, which immediately invalidates this one -
+        // every check below (and every future processFrame() tick started by this call) compares
+        // against this.currentGeneration and bails out the moment it no longer matches.
+        const generation = ++this.currentGeneration;
 
         this.frameRate = inputStream.getVideoTracks()[0]?.getSettings().frameRate || 33;
         await this.initPromise;
         if (signal?.aborted) {
             throw signal.reason ?? new AbortError("Transform aborted after initialization");
+        }
+        if (generation !== this.currentGeneration) {
+            throw new AbortError("Transform superseded by a newer transform() call");
         }
 
         if (this.config.mode === "none") {
@@ -647,11 +677,17 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
         if (signal?.aborted) {
             throw signal.reason ?? new AbortError("Transform aborted while waiting for video metadata");
         }
+        if (generation !== this.currentGeneration) {
+            throw new AbortError("Transform superseded by a newer transform() call");
+        }
 
         const playPromise = this.inputVideo.play();
         await raceAbort(playPromise, signal);
         if (signal?.aborted) {
             throw signal.reason ?? new AbortError("Transform aborted while starting video playback");
+        }
+        if (generation !== this.currentGeneration) {
+            throw new AbortError("Transform superseded by a newer transform() call");
         }
 
         // Setup canvas dimensions
@@ -692,6 +728,9 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
         if (signal?.aborted) {
             throw signal.reason ?? new AbortError("Transform aborted before starting processing");
         }
+        if (generation !== this.currentGeneration) {
+            throw new AbortError("Transform superseded by a newer transform() call");
+        }
 
         // Set dimensions for both canvases
         this.glCanvas.width = videoWidth;
@@ -717,7 +756,7 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
         // that never resets
 
         // Start processing loop
-        this.processFrame();
+        this.processFrame(generation);
 
         return this.outputStream;
     }
