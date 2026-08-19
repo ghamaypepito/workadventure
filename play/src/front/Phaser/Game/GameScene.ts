@@ -628,7 +628,11 @@ export class GameScene extends DirtyScene {
     }
 
     public getCustomEntityCollectionUrl() {
-        const mapStoragePath = `${PUBLIC_MAP_STORAGE_PREFIX}${ENTITIES_FOLDER_PATH_NO_PREFIX}/${ENTITY_COLLECTION_FILE}`;
+        let mapStoragePrefix = PUBLIC_MAP_STORAGE_PREFIX ?? "";
+        if (!mapStoragePrefix.endsWith("/")) {
+            mapStoragePrefix += "/";
+        }
+        const mapStoragePath = `${mapStoragePrefix}${ENTITIES_FOLDER_PATH_NO_PREFIX}/${ENTITY_COLLECTION_FILE}`;
         return new URL(mapStoragePath, this.wamUrlFile).toString();
     }
 
