@@ -761,7 +761,18 @@ export class RoomConnection implements RoomConnection {
                     break;
                 }
                 case "backConnectionCloseReasonMessage": {
-                    console.warn("Received an internal back connection close reason message on the front.");
+                    // The server sends this right before intentionally ending the socket (e.g. a
+                    // newer connection from the same browser tab replaced this one). Without
+                    // marking the connection closed here, cleanupConnection() falls through to its
+                    // "unexpected disconnect" path and fires _serverDisconnected, causing this
+                    // now-superseded tab to reconnect and re-join anyway - racing the still-live
+                    // connection and repeatedly wedging its LiveKit room (endless failed
+                    // "resuming signal connection" attempts, audio/video never establishing).
+                    console.warn(
+                        "Received an internal back connection close reason message on the front: " +
+                            message.backConnectionCloseReasonMessage.reason,
+                    );
+                    this._closed = true;
                     break;
                 }
                 default: {
