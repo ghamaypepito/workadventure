@@ -50,6 +50,22 @@
         }
     }
 
+    // Selects the first texture of the first collection that actually has one. Used as a last-resort
+    // fallback: collections[0] itself can be empty (e.g. filtered out for this room), and blindly
+    // selecting collections[0].textures[0] in that case fed selectTexture() an id belonging to no
+    // texture at all, which made it throw uncaught and left the picker stuck on its loading spinner.
+    function selectFirstAvailableTexture(): boolean {
+        const collections = wokaData?.["woka"]?.collections ?? [];
+        for (let i = 0; i < collections.length; i++) {
+            const firstTexture = collections[i].textures?.[0];
+            if (firstTexture) {
+                selectTexture(i, firstTexture.id);
+                return true;
+            }
+        }
+        return false;
+    }
+
     function loadSavedTextures() {
         try {
             const savedTextureIds = gameManager.getCharacterTextureIds();
@@ -75,13 +91,21 @@
             }, 800);
         } catch (err) {
             console.warn("Cannot load previous WOKA textures:", err);
-            selectTexture(0, wokaData?.["woka"]?.collections?.[0]?.textures?.[0]?.id || "");
+            selectFirstAvailableTexture();
         } finally {
             // Find the collection used to select the Woka
-            currentWokaCollection = (wokaData as WokaData)["woka"].collections.find((c: WokaCollection) =>
-                c.textures.find((t: WokaTexture) => t.id === selectedWokaTextureId["woka"]),
-            ) as WokaCollection;
-            selectCurrentCollection(currentWokaCollection.name);
+            currentWokaCollection =
+                (wokaData?.["woka"]?.collections ?? []).find((c: WokaCollection) =>
+                    c.textures.find((t: WokaTexture) => t.id === selectedWokaTextureId["woka"]),
+                ) ?? null;
+            if (currentWokaCollection) {
+                selectCurrentCollection(currentWokaCollection.name);
+            } else {
+                // No collection has any texture at all - nothing we can pick. Surface the error state
+                // instead of crashing here and leaving the picker stuck on its loading spinner forever.
+                console.error("No Woka collection with any texture is available");
+                error = "Failed to load Woka customization data";
+            }
         }
     }
 
