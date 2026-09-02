@@ -495,6 +495,22 @@ export class Space implements CustomJsonReplacerInterface, ICommunicationSpace {
             // If the sender is the receiver, it means the message is sent from the server itself.
             // This is a special case, where (if the receiver is gone), we don't want to throw an error.
             if (privateEvent.senderUserId === privateEvent.receiverUserId) {
+                // This drops the message on the floor: the receiver isn't in this.users right now,
+                // so the delivery loop below would find nothing to write to either. It was silent
+                // until now, which made a real failure mode invisible - a livekitInvitationMessage
+                // sent while its recipient is mid-reconnect (e.g. LiveKit's generateToken() round-trip
+                // races a leave/rejoin) vanishes with no trace, and nothing ever retries it, leaving
+                // the other side of a 1:1 proximity call alone in the room indefinitely. Logging this
+                // doesn't fix the race, but a silent drop that leaves no evidence is the reason this
+                // exact case took so long to pin down from users' "audio isn't working" reports alone.
+                console.warn(
+                    `dispatchPrivateEvent: self-dispatched event to ${privateEvent.receiverUserId} in space ${this.name} dropped - recipient not present`,
+                    { event: privateEvent.spaceEvent?.event?.$case },
+                );
+                Sentry.captureMessage(
+                    `dispatchPrivateEvent: self-dispatched ${privateEvent.spaceEvent?.event?.$case ?? "event"} dropped, recipient not in space`,
+                    "warning",
+                );
                 return;
             }
             throw new Error(`Sender ${privateEvent.senderUserId} not found in space ${this.name}`);

@@ -92,9 +92,18 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
             // Register the user as streaming
             this.streamingUsers.set(user.spaceUserId, user);
 
-            // Send invitation to the new user if not already receiving
+            // Send invitation to the new user if not already receiving. Awaited (matching
+            // addUserToNotify() below) rather than fire-and-forget: this runs inside this user's own
+            // per-spaceUserId queue, so awaiting it blocks any deleteUser() for this same user from
+            // running until the invitation is actually sent. Without the await, a fast-following
+            // leave (a reconnect, a brief proximity overlap) could remove the user from the space
+            // while generateToken()'s network round-trip was still in flight; by the time
+            // dispatchPrivateEvent() ran, the user was gone, and the self-dispatch case in
+            // Space.dispatchPrivateEvent() drops that silently - the recipient's client never
+            // received a token and just sat there, which is why some 1:1 proximity rooms end up with
+            // only one side ever actually publishing.
             if (!this.receivingUsers.has(user.spaceUserId)) {
-                this.sendLivekitInvitationMessage(user).catch((error) => {
+                await this.sendLivekitInvitationMessage(user).catch((error) => {
                     console.error(`Error generating token for user ${user.spaceUserId} in Livekit:`, error);
                     Sentry.captureException(error);
                 });
