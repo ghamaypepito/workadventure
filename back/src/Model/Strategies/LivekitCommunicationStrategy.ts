@@ -77,10 +77,21 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
 
             await this.createRoomPromise;
 
-            // Send invitation to all receiving users if this is the first room creation
+            // Send invitation to all receiving users if this is the first room creation. Routed
+            // through each receivingUser's OWN per-spaceUserId queue (not this addUser() call's
+            // queue, which is keyed by the new streaming user, not them) - otherwise a concurrent
+            // deleteUserFromNotify() for one of THEM, which does run on that queue, could remove
+            // them from the space while this invitation's generateToken() round-trip was still in
+            // flight, hitting the exact same silent-drop race the awaited send below was fixed for
+            // (Space.dispatchPrivateEvent()'s self-dispatch case drops a message with no recipient
+            // left to deliver to). This is what let it recur in a conference room after the first
+            // fix: this loop, not the one below, is what notifies users who were already receiving
+            // before the room existed.
             if (this.receivingUsers.size > 0 && this.streamingUsers.size === 0) {
                 for (const receivingUser of this.receivingUsers.values()) {
-                    this.sendLivekitInvitationMessage(receivingUser).catch((error) => {
+                    this.queueUserOperation(receivingUser.spaceUserId, () =>
+                        this.sendLivekitInvitationMessage(receivingUser),
+                    ).catch((error) => {
                         console.error(
                             `Error generating token for user ${receivingUser.spaceUserId} in Livekit:`,
                             error,
@@ -272,10 +283,16 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
             console.warn("User not found in space", senderUserId);
             return;
         }
-        this.sendLivekitInvitationMessage(senderUser).catch((error) => {
-            console.error(`Error generating token for user ${senderUser.spaceUserId} in Livekit:`, error);
-            Sentry.captureException(error);
-        });
+        // Same reasoning as the other sendLivekitInvitationMessage() call sites in this file:
+        // route through this user's own per-spaceUserId queue so a concurrent deleteUser() /
+        // deleteUserFromNotify() for them can't remove them from the space mid-flight and cause
+        // the invitation to be silently dropped.
+        this.queueUserOperation(senderUser.spaceUserId, () => this.sendLivekitInvitationMessage(senderUser)).catch(
+            (error) => {
+                console.error(`Error generating token for user ${senderUser.spaceUserId} in Livekit:`, error);
+                Sentry.captureException(error);
+            },
+        );
     }
 
     cleanup(): void {
