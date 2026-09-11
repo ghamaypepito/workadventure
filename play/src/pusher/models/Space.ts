@@ -368,7 +368,18 @@ export class Space implements SpaceForSpaceConnectionInterface {
 
         return {
             changedFields: updateSpaceUserMessage.updateMask,
-            partialSpaceUser: updateSpaceUserMessage.user,
+            // Carry the spaceUserId we actually resolved, not the one the message arrived with. When
+            // the lookup above fell back to userUuid (the client sent an id that went stale mid
+            // reconnect), returning the stale id meant SpaceToBackForwarder.updateUser() - which does
+            // its own strict _localConnectedUser.get(spaceUserId) with no fallback - threw
+            // "spaceUser not found" and the update was dropped on the floor. Every fallback warning
+            // was therefore paired 1:1 with a lost update, and those updates carry cameraState /
+            // microphoneState, so a mute/unmute or camera toggle sent during a reconnect never
+            // reached anyone else - the other side just sees the stream as still off.
+            partialSpaceUser: {
+                ...updateSpaceUserMessage.user,
+                spaceUserId: targetUser.spaceUserId,
+            },
         };
     }
 
