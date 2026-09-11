@@ -4,6 +4,7 @@ import { AbortError } from "@workadventure/shared-utils/src/Abort/AbortError";
 import { raceAbort } from "@workadventure/shared-utils/src/Abort/raceAbort";
 import { isFirefox, isIOS } from "../DeviceUtils";
 import { CanvasBlurRenderer, type BlurBackend } from "./CanvasBlurRenderer";
+import { processSegmentationResult } from "./processSegmentationResult";
 import { logOnce } from "./logOnce";
 import { TasksVisionBlurCompositor } from "./TasksVisionBlurCompositor";
 import type { BackgroundConfig, BackgroundTransformer } from "./createBackgroundTransformer";
@@ -319,9 +320,7 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
             // Segment the current video frame
             const result = this.imageSegmenter.segmentForVideo(this.inputVideo, timestampMicroseconds);
 
-            if (result.confidenceMasks && result.confidenceMasks.length > 0) {
-                this.processResults(result.confidenceMasks[0]);
-            }
+            processSegmentationResult(result, (mask) => this.processResults(mask));
             // Silently skip if no mask - this can happen occasionally and is not critical
             this.consecutiveSegmentationErrors = 0;
 
@@ -351,7 +350,6 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
 
     private processResults(mask: MPMask): void {
         if (this.closed) {
-            mask.close();
             return;
         }
 
@@ -359,7 +357,6 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
 
         // Skip processing if canvas has invalid dimensions
         if (!width || !height || width === 0 || height === 0) {
-            mask.close();
             console.warn(
                 `[MediaPipe Tasks Vision] Skipping frame processing: canvas dimensions are ${width}x${height}`,
             );
@@ -371,12 +368,10 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
         } else if (this.config.mode === "image" || this.config.mode === "video") {
             this.processReplaceMode(mask);
         } else {
-            mask.close();
             throw new Error(`[MediaPipe Tasks Vision] Unknown mode: ${this.config.mode}`);
         }
 
-        // Clean up mask resources
-        mask.close();
+        // The caller releases all result masks, including when rendering throws.
 
         if (this.captureBackend === "2d-copy-capture") {
             this.outputCtx.drawImage(this.glCanvas, 0, 0, width, height);

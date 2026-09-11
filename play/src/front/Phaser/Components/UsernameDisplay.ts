@@ -1,4 +1,5 @@
 import { AvailabilityStatus } from "@workadventure/messages";
+import { firstName } from "../../Utils/firstName";
 import type { GameScene } from "../Game/GameScene";
 import { waScaleManager, WaScaleManagerEvent } from "../Services/WaScaleManager";
 import { UsernameMegaphoneDisplay } from "./UsernameMegaphoneDisplay";
@@ -6,7 +7,7 @@ import { UsernameStatusDisplay } from "./UsernameStatusDisplay";
 
 const CORRECTION_RATE = 0.65; // When one game pixel is smaller than one screen pixel (zoomed-out), we zoom out the Woka name, but only up to CORRECTION_RATE. After that, the Woka name will stay at its current screen size even if we zoom out more (to keep the text readable)
 const USERNAME_FONT_FAMILY = "Roboto";
-const USERNAME_FONT_SIZE = 10;
+const USERNAME_FONT_SIZE = 9;
 const USERNAME_FONT_WEIGHT = 500;
 const USERNAME_SIZE_ANIMATION_DURATION = 375;
 const USERNAME_SIZE_ANIMATION_EASING = "cubic-bezier(0.2, 0, 0, 1)";
@@ -51,7 +52,7 @@ export class UsernameDisplay {
         playerName: string,
         outlineColor: number | undefined,
     ) {
-        this.playerName = playerName;
+        this.playerName = firstName(playerName);
         this.displayScale = this.getDisplayScale(waScaleManager.zoomModifier);
 
         this.playerNameOutlineColor = outlineColor;

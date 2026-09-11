@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onDestroy } from "svelte";
+    import { firstName } from "../../../Utils/firstName";
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import { availabilityStatusStore, inBbbStore, inJitsiStore, inLivekitStore } from "../../../Stores/MediaStore";
     import { customStatusMessageStore } from "../../../Stores/CustomStatusMessageStore";
@@ -99,9 +100,9 @@
             </div>
             <div class="grow flex flex-row @xl/actions:flex-col justify-start text-start pr-2">
                 <div
-                    class="font-bold text-white leading-5 whitespace-nowrap select-none text-base @sm/actions:text-sm @xl/actions:text-base order-last @xl/actions:order-first flex items-center"
+                    class="font-bold text-white leading-5 whitespace-nowrap select-none text-[15px] @sm/actions:text-[13px] @xl/actions:text-[15px] order-last @xl/actions:order-first flex items-center"
                 >
-                    {userName}
+                    {firstName(userName)}
                 </div>
                 <div class="text-xxs bold whitespace-nowrap select-none flex items-center">
                     <div

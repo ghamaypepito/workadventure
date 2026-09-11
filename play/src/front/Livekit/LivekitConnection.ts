@@ -59,17 +59,26 @@ export class LivekitConnection {
                     Sentry.captureException(new Error("Livekit invitation already triggered for this LivekitState"));
                     this.shutdownAbortController.abort();
                 }
+                // Aborting stops pending media work, but does not close an established room.
+                // Release it before reconnecting with the same participant identity.
+                this.livekitRoom?.destroy();
+                this.livekitRoom = undefined;
                 this.shutdownAbortController = new AbortController();
                 const serverUrl = message.livekitInvitationMessage.serverUrl;
                 const token = message.livekitInvitationMessage.token;
 
-                const room = this.createLivekitRoom(serverUrl, token, this.shutdownAbortController.signal);
+                const signal = this.shutdownAbortController.signal;
+                const room = this.createLivekitRoom(serverUrl, token, signal);
 
                 (async () => {
                     await room.prepareConnection();
+                    if (signal.aborted) return;
                     await room.joinRoom();
+                    // A superseded attempt must not consume the replacement room's queued media.
+                    if (signal.aborted) return;
                     if (this.streamToDispatch) {
-                        await this.dispatchStream(this.streamToDispatch);
+                        await room.dispatchStream(this.streamToDispatch);
+                        if (signal.aborted) return;
                     }
                     this.streamToDispatch = undefined;
                 })().catch((err) => {
@@ -116,10 +125,6 @@ export class LivekitConnection {
     }
 
     destroy() {
-        if (!this.livekitRoom) {
-            return;
-        }
-
         try {
             this.shutdownAbortController?.abort();
             this.shutdownAbortController = undefined;
@@ -127,10 +132,15 @@ export class LivekitConnection {
         } catch (err) {
             console.error("Error destroying Livekit room:", err);
             Sentry.captureException(err);
-        }
-        this._streamingMegaphoneStore.set(false);
-        for (const subscription of this.unsubscribers) {
-            subscription.unsubscribe();
+        } finally {
+            this.livekitRoom = undefined;
+            this.streamToDispatch = undefined;
+            this._streamingMegaphoneStore.set(false);
+            // A connection can be destroyed before an invitation, or after a disconnect.
+            // Neither case has a room, but both still have invitation subscriptions.
+            for (const subscription of this.unsubscribers) {
+                subscription.unsubscribe();
+            }
         }
     }
 
