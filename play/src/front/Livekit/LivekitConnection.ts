@@ -67,13 +67,18 @@ export class LivekitConnection {
                 const serverUrl = message.livekitInvitationMessage.serverUrl;
                 const token = message.livekitInvitationMessage.token;
 
-                const room = this.createLivekitRoom(serverUrl, token, this.shutdownAbortController.signal);
+                const signal = this.shutdownAbortController.signal;
+                const room = this.createLivekitRoom(serverUrl, token, signal);
 
                 (async () => {
                     await room.prepareConnection();
+                    if (signal.aborted) return;
                     await room.joinRoom();
+                    // A superseded attempt must not consume the replacement room's queued media.
+                    if (signal.aborted) return;
                     if (this.streamToDispatch) {
-                        await this.dispatchStream(this.streamToDispatch);
+                        await room.dispatchStream(this.streamToDispatch);
+                        if (signal.aborted) return;
                     }
                     this.streamToDispatch = undefined;
                 })().catch((err) => {
