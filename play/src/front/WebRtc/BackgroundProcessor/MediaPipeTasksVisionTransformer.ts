@@ -4,6 +4,7 @@ import { AbortError } from "@workadventure/shared-utils/src/Abort/AbortError";
 import { raceAbort } from "@workadventure/shared-utils/src/Abort/raceAbort";
 import { isFirefox, isIOS } from "../DeviceUtils";
 import { CanvasBlurRenderer, type BlurBackend } from "./CanvasBlurRenderer";
+import { videoTimestamp } from "./videoTimestamp";
 import { processSegmentationResult } from "./processSegmentationResult";
 import { logOnce } from "./logOnce";
 import { TasksVisionBlurCompositor } from "./TasksVisionBlurCompositor";
@@ -75,7 +76,7 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
     // Use a global timestamp that never resets to ensure monotonic timestamps for MediaPipe
     private globalStartTime = performance.now();
     // Track the last timestamp to guarantee strict monotonic increase
-    private lastTimestampMicroseconds = 0;
+    private lastTimestampMilliseconds = 0;
     // Circuit breaker: reported live (2026-08-18) as the whole game freezing during a call,
     // only recoverable via a restart. Confirmed via a user's browser console: segmentForVideo()
     // was throwing the same "Packet timestamp mismatch" error over 1000 times in a row - once
@@ -304,21 +305,16 @@ export class MediaPipeTasksVisionTransformer implements BackgroundTransformer {
         }
 
         try {
-            // Calculate timestamp in microseconds (MediaPipe requires microseconds)
-            // Use a global timestamp that never resets to ensure strict monotonic increase
-            // This is critical: MediaPipe requires timestamps to be STRICTLY increasing
-            const currentTime = performance.now();
-            let timestampMicroseconds = Math.floor((currentTime - this.globalStartTime) * 1000);
-
-            // Ensure timestamp is strictly greater than the last one
-            // performance.now() can return the same value on rapid calls, causing MediaPipe errors
-            if (timestampMicroseconds <= this.lastTimestampMicroseconds) {
-                timestampMicroseconds = this.lastTimestampMicroseconds + 1;
-            }
-            this.lastTimestampMicroseconds = timestampMicroseconds;
+            // The JavaScript API accepts milliseconds and converts them internally.
+            // Keep one monotonic clock across camera restarts.
+            const timestampMilliseconds = videoTimestamp(
+                performance.now() - this.globalStartTime,
+                this.lastTimestampMilliseconds,
+            );
+            this.lastTimestampMilliseconds = timestampMilliseconds;
 
             // Segment the current video frame
-            const result = this.imageSegmenter.segmentForVideo(this.inputVideo, timestampMicroseconds);
+            const result = this.imageSegmenter.segmentForVideo(this.inputVideo, timestampMilliseconds);
 
             processSegmentationResult(result, (mask) => this.processResults(mask));
             // Silently skip if no mask - this can happen occasionally and is not critical

@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { firstName } from "../../Utils/firstName";
     import MeetingViewToggle from "../ActionBar/MeetingViewToggle.svelte";
     import { currentZoneNameStore } from "../../Stores/CurrentZoneStore";
     import { IconChevronDown } from "@wa-icons";
@@ -88,7 +89,7 @@
                     toggleAccountMenu();
                 }}
             >
-                {sessionUser.name ?? sessionUser.email ?? "Account"}
+                {sessionUser.name ? firstName(sessionUser.name) : (sessionUser.email ?? "Account")}
                 <IconChevronDown font-size="14" />
             </button>
             {#if showAccountMenu}
