@@ -3,6 +3,7 @@
     <head>
         <title>{{ title }}</title>
         <meta charset="UTF-8" />
+        <link rel="preload" as="image" href="/static/images/connectium-office-loading.png" />
         <meta name="title" content="{{ title }}" />
         <meta name="description" content="{{ description }}" />
         <meta name="author" content="{{ author }}" />
@@ -236,7 +237,7 @@
         <div id="static-loading-screen" style="
             position: fixed; inset: 0; z-index: 99999;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            background-color: rgb(27, 42, 65); color: #fff;
+            background: linear-gradient(rgba(16,31,43,.55),rgba(16,31,43,.8)), url(/static/images/connectium-office-loading.png) center / cover, #101f2b; color: #fff;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         ">
             <div style="
@@ -244,7 +245,8 @@
                 border: 4px solid rgba(255,255,255,0.2); border-top-color: #fff;
                 border-radius: 50%; animation: static-loading-spin 0.8s linear infinite;
             "></div>
-            <div style="font-size: 1rem; opacity: 0.85;">Loading WorkAdventure&hellip;</div>
+            <h1 style="font-size:clamp(32px,5vw,60px);text-align:center;margin:0 24px 16px;font-weight:600;">ConnectiumAI Office</h1>
+            <div role="status" style="font-size:1rem;opacity:.85;">Getting your workplace ready&hellip;</div>
         </div>
         <div id="static-loading-badge" style="
             display: none;
@@ -260,7 +262,7 @@
                 border: 2.5px solid rgba(255,255,255,0.25); border-top-color: #fff;
                 border-radius: 50%; animation: static-loading-spin 0.8s linear infinite;
             "></div>
-            <span>Loading room&hellip;</span>
+            <span>Opening ConnectiumAI Office&hellip;</span>
         </div>
         <style>
             @keyframes static-loading-spin { to { transform: rotate(360deg); } }
