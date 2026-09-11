@@ -1,5 +1,6 @@
 <script lang="ts">
     import type { Snippet } from "svelte";
+    import { firstName } from "../../Utils/firstName";
     import Woka from "../Woka/Woka.svelte";
     import type { PictureStore } from "../../Stores/PictureStore";
 
@@ -42,7 +43,7 @@
                     <Woka src={$picture ?? ""} customWidth="100%" {grayscale} />
                 </div>
                 <div class="flex items-center">
-                    <span class="select-none">{name}</span>
+                    <span class="select-none">{firstName(name)}</span>
                     {@render children?.()}
                 </div>
             </div>
@@ -65,7 +66,7 @@
                         <Woka src={$picture} customWidth="42px" {grayscale} />
                     </div>
                 {/if}
-                <span class="text-xs @[17.5rem]/videomediabox:text-sm">{name}</span>
+                <span class="text-xs @[17.5rem]/videomediabox:text-sm">{firstName(name)}</span>
 
                 <!--{#if $requestedScreenSharingState === true}-->
                 <!--    <ScreenShareIcon />-->

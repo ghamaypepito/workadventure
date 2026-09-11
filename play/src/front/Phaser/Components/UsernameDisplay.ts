@@ -1,4 +1,5 @@
 import { AvailabilityStatus } from "@workadventure/messages";
+import { firstName } from "../../Utils/firstName";
 import type { GameScene } from "../Game/GameScene";
 import { waScaleManager, WaScaleManagerEvent } from "../Services/WaScaleManager";
 import { UsernameMegaphoneDisplay } from "./UsernameMegaphoneDisplay";
@@ -51,7 +52,7 @@ export class UsernameDisplay {
         playerName: string,
         outlineColor: number | undefined,
     ) {
-        this.playerName = playerName;
+        this.playerName = firstName(playerName);
         this.displayScale = this.getDisplayScale(waScaleManager.zoomModifier);
 
         this.playerNameOutlineColor = outlineColor;
