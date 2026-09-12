@@ -1115,7 +1115,9 @@ export class GameRoom implements BrothersFinder {
                 if (path.extname(roomUrlObj.pathname) === ".tmj") {
                     mapUrl = `${PUBLIC_MAP_STORAGE_URL}/${match[1]}`;
                 } else {
-                    wamUrl = `${PUBLIC_MAP_STORAGE_URL}/${match[1]}`;
+                    // Keep the renamed public office on the original editable map and relative assets.
+                    const mapPath = match[1] === "virtual-workplace/map.wam" ? "vings-test/map.wam" : match[1];
+                    wamUrl = `${PUBLIC_MAP_STORAGE_URL}/${mapPath}`;
                 }
                 canEdit = true;
             } else {
