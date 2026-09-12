@@ -67,13 +67,13 @@
                         })
                         .slice(0, USERS_BY_ROOM_LIMITATION);
 
-                    if (users.length > 0) roomsWithUsersAcc.push([roomName, users]);
+                    if (users.length > 0) roomsWithUsersAcc.push([currentPlayUri, roomName, users]);
 
                     return roomsWithUsersAcc;
                 },
-                [] as [string, ChatUser[]][],
+                [] as [string | undefined, string, ChatUser[]][],
             )
-            .sort(([aKey, _aValue]: [string, ChatUser[]], [bKey, _bValue]: [string, ChatUser[]]) => {
+            .sort(([, aKey], [, bKey]) => {
                 if (aKey === $LL.chat.userList.disconnected()) return 1;
                 if (bKey === $LL.chat.userList.disconnected()) return -1;
 
@@ -116,7 +116,7 @@
 <div class="flex flex-col h-full">
     <ChatHeader />
     <div class="flex-1 min-h-0 overflow-x-hidden overflow-y-auto">
-        {#each roomsWithUsers as [roomName, userInRoom] (roomName)}
+        {#each roomsWithUsers as [roomUri, roomName, userInRoom] (roomUri)}
             <div class=" users flex flex-col shrink-0 relative first:pt-[12px]">
                 <button
                     class="group relative px-3 gap-2 rounded-none text-white/75 hover:text-white h-11 hover:bg-contrast-200/10 w-full flex space-x-2 items-center border border-solid border-x-0 border-t border-b-0 border-white/10 text-white outline-none border-y-0 appearance-none m-0"

@@ -58,6 +58,7 @@ import {
 } from "../enums/EnvironmentVariable";
 import type { AdminBannedData, FetchMemberDataByUuidResponse } from "./AdminApi";
 import type { AdminInterface } from "./AdminInterface";
+import { officeMapStoragePath, OFFICE_ROOM_PATH, LEGACY_OFFICE_ROOM_PATH } from "./officeRoomPath";
 import { localWokaService } from "./LocalWokaService";
 import { MetaTagsDefaultValue } from "./MetaTagsBuilder";
 import { localCompanionService } from "./LocalCompanionSevice";
@@ -262,10 +263,15 @@ class LocalAdmin implements AdminInterface {
         const roomUrl = new URL(playUri);
 
         if (roomUrl.pathname === "/") {
-            roomUrl.pathname = START_ROOM_URL;
+            roomUrl.pathname = START_ROOM_URL === LEGACY_OFFICE_ROOM_PATH ? OFFICE_ROOM_PATH : START_ROOM_URL;
             return Promise.resolve({
                 redirectUrl: roomUrl.toString(),
             });
+        }
+
+        if (roomUrl.pathname === LEGACY_OFFICE_ROOM_PATH) {
+            roomUrl.pathname = OFFICE_ROOM_PATH;
+            return { redirectUrl: roomUrl.toString() };
         }
 
         let mapUrl = undefined;
@@ -279,7 +285,7 @@ class LocalAdmin implements AdminInterface {
                     redirectUrl: roomUrl.toString().replace(".tmj", ".wam"),
                 });
             }
-            wamUrl = `${PUBLIC_MAP_STORAGE_URL}/${match[1]}`;
+            wamUrl = `${PUBLIC_MAP_STORAGE_URL}/${officeMapStoragePath(roomUrl.pathname)}`;
             canEdit = ENABLE_MAP_EDITOR;
         } else {
             match = /\/_\/[^/]+\/(.+)/.exec(roomUrl.pathname);
