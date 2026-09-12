@@ -1,9 +1,24 @@
 {
-    "buildCommand": "sh vercel-build.sh",
-    "outputDirectory": "play/dist/public",
-    "installCommand": "HUSKY=0 npm install && npm install --prefix messages",
-    "framework": null,
-    "rewrites": [
-        { "source": "/((?!api/).*)", "destination": "/index.html" }
-    ]
+  "buildCommand": "sh vercel-build.sh",
+  "outputDirectory": "play/dist/public",
+  "installCommand": "HUSKY=0 npm install && npm install --prefix messages",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/~/vings-test/map.wam",
+      "destination": "/~/virtual-workplace/map.wam",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "destination": "/~/virtual-workplace/map.wam",
+      "permanent": false
+    }
+  ]
 }

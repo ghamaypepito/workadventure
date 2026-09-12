@@ -12,13 +12,13 @@ describe("UrlManager vanity invitation slugs", () => {
         setPathname(originalPathname);
     });
 
-    it("resolves a bare single-segment path to the vings-test room", () => {
-        expect(urlManager.resolveRoomPath("/john")).toBe("/~/vings-test/map.wam");
-        expect(urlManager.resolveRoomPath("/maria-sales")).toBe("/~/vings-test/map.wam");
+    it("resolves a bare single-segment path to the virtual-workplace room", () => {
+        expect(urlManager.resolveRoomPath("/john")).toBe("/~/virtual-workplace/map.wam");
+        expect(urlManager.resolveRoomPath("/maria-sales")).toBe("/~/virtual-workplace/map.wam");
     });
 
     it("leaves real room paths untouched", () => {
-        expect(urlManager.resolveRoomPath("/~/vings-test/map.wam")).toBe("/~/vings-test/map.wam");
+        expect(urlManager.resolveRoomPath("/~/virtual-workplace/map.wam")).toBe("/~/virtual-workplace/map.wam");
         expect(urlManager.resolveRoomPath("/_/global/some-room")).toBe("/_/global/some-room");
     });
 
@@ -51,32 +51,32 @@ describe("UrlManager vanity invitation slugs", () => {
             urlManager.rememberVanitySlugBeforeNavigatingAway();
 
             // Simulate landing back after the SSO round trip, on the real room path.
-            setPathname("/~/vings-test/map.wam");
+            setPathname("/~/virtual-workplace/map.wam");
             urlManager.restoreVanitySlugIfRemembered();
 
             expect(window.location.pathname).toBe("/john");
         });
 
         it("does nothing when the current path isn't a vanity slug", () => {
-            setPathname("/~/vings-test/map.wam");
+            setPathname("/~/virtual-workplace/map.wam");
             urlManager.rememberVanitySlugBeforeNavigatingAway();
 
-            setPathname("/~/vings-test/map.wam");
+            setPathname("/~/virtual-workplace/map.wam");
             urlManager.restoreVanitySlugIfRemembered();
 
-            expect(window.location.pathname).toBe("/~/vings-test/map.wam");
+            expect(window.location.pathname).toBe("/~/virtual-workplace/map.wam");
         });
 
         it("only restores once", () => {
             setPathname("/john");
             urlManager.rememberVanitySlugBeforeNavigatingAway();
 
-            setPathname("/~/vings-test/map.wam");
+            setPathname("/~/virtual-workplace/map.wam");
             urlManager.restoreVanitySlugIfRemembered();
-            setPathname("/~/vings-test/map.wam");
+            setPathname("/~/virtual-workplace/map.wam");
             urlManager.restoreVanitySlugIfRemembered();
 
-            expect(window.location.pathname).toBe("/~/vings-test/map.wam");
+            expect(window.location.pathname).toBe("/~/virtual-workplace/map.wam");
         });
     });
 });

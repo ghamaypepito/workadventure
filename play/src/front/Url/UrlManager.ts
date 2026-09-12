@@ -13,7 +13,7 @@ export enum GameConnexionTypes {
 /**
  * The room every vanity invitation slug (e.g. "/john", "/maria") silently resolves to.
  */
-const VANITY_SLUG_ROOM_TARGET = "/~/vings-test/map.wam";
+const VANITY_SLUG_ROOM_TARGET = "/~/virtual-workplace/map.wam";
 
 /**
  * Reserved single-segment paths that must never be treated as a vanity sales-invite slug.
