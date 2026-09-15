@@ -8,7 +8,18 @@ import type { ICommunicationSpace } from "../Interfaces/ICommunicationSpace";
 import type { IRecordableStrategy } from "../Interfaces/ICommunicationStrategy";
 import type { LiveKitService, RecordingStartInfo } from "../Services/LivekitService";
 
+import { LivekitRoomLease } from "../Services/LivekitRoomLease";
+
 export class LivekitCommunicationStrategy implements IRecordableStrategy {
+    private disposed = false;
+    private roomLease: LivekitRoomLease | undefined;
+
+    private getRoomLease(): LivekitRoomLease {
+        return (this.roomLease ??= new LivekitRoomLease(
+            JSON.stringify([this.livekitService.getLivekitFrontendUrl(), this.space.getSpaceName()]),
+        ));
+    }
+
     private usersReady: Set<string> = new Set();
     private createRoomPromise: Promise<void> | null = null;
 
@@ -38,7 +49,7 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
                 // Ignore errors from previous operations to continue the queue
             })
             .then(async () => {
-                await operation();
+                if (!this.disposed) await operation();
             });
 
         this.pendingOperations.set(userId, newOperation);
@@ -66,16 +77,27 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
             // (see the identical fix in addUserToNotify() below for the receiving-side case).
             // Refresh the registration and fall through so a new token is sent below, instead of
             // silently dropping it.
-            if (this.streamingUsers.has(user.spaceUserId)) {
+            const refreshingRegistration = this.streamingUsers.has(user.spaceUserId);
+            if (refreshingRegistration) {
                 console.warn("User already streaming in the room - refreshing registration", user.spaceUserId);
             }
 
-            // Ensure the Livekit room is created (only once)
+            // Reserve membership before asynchronous creation so pending deletion sees new publishers.
+            const firstPublisher = this.streamingUsers.size === 0;
+            this.streamingUsers.set(user.spaceUserId, user);
             if (!this.createRoomPromise) {
-                this.createRoomPromise = this.livekitService.createRoom(this.space.getSpaceName());
+                this.createRoomPromise = this.getRoomLease().run(() =>
+                    this.livekitService.createRoom(this.space.getSpaceName()),
+                );
             }
-
-            await this.createRoomPromise;
+            try {
+                await this.createRoomPromise;
+            } catch (error) {
+                this.createRoomPromise = null;
+                this.streamingUsers.delete(user.spaceUserId);
+                throw error;
+            }
+            if (this.disposed || !this.getRoomLease().isCurrent) return;
 
             // Send invitation to all receiving users if this is the first room creation. Routed
             // through each receivingUser's OWN per-spaceUserId queue (not this addUser() call's
@@ -87,7 +109,7 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
             // left to deliver to). This is what let it recur in a conference room after the first
             // fix: this loop, not the one below, is what notifies users who were already receiving
             // before the room existed.
-            if (this.receivingUsers.size > 0 && this.streamingUsers.size === 0) {
+            if (this.receivingUsers.size > 0 && firstPublisher) {
                 for (const receivingUser of this.receivingUsers.values()) {
                     this.queueUserOperation(receivingUser.spaceUserId, () =>
                         this.sendLivekitInvitationMessage(receivingUser),
@@ -100,8 +122,6 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
                     });
                 }
             }
-            // Register the user as streaming
-            this.streamingUsers.set(user.spaceUserId, user);
 
             // Send invitation to the new user if not already receiving. Awaited (matching
             // addUserToNotify() below) rather than fire-and-forget: this runs inside this user's own
@@ -113,7 +133,7 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
             // Space.dispatchPrivateEvent() drops that silently - the recipient's client never
             // received a token and just sat there, which is why some 1:1 proximity rooms end up with
             // only one side ever actually publishing.
-            if (!this.receivingUsers.has(user.spaceUserId)) {
+            if (refreshingRegistration || !this.receivingUsers.has(user.spaceUserId)) {
                 await this.sendLivekitInvitationMessage(user).catch((error) => {
                     console.error(`Error generating token for user ${user.spaceUserId} in Livekit:`, error);
                     Sentry.captureException(error);
@@ -146,7 +166,7 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
             const deleted = this.streamingUsers.delete(user.spaceUserId);
 
             if (!deleted) {
-                console.warn("User to delete not found in streaming users", user.spaceUserId);
+                return;
             }
 
             // Let's only disconnect from Livekit if the user is not watching in the room anymore
@@ -162,12 +182,16 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
                     Sentry.captureException(error);
                 }
 
-                this.createRoomPromise = null;
-                for (const receivingUser of this.receivingUsers.values()) {
-                    this.sendLivekitDisconnectMessage(receivingUser);
-                }
-
-                await this.livekitService.deleteRoom(this.space.getSpaceName());
+                if (this.disposed) return;
+                await this.getRoomLease().run(async () => {
+                    // Recheck after recording cleanup and after waiting for other room API calls.
+                    if (this.streamingUsers.size > 0) return;
+                    this.createRoomPromise = null;
+                    for (const receivingUser of this.receivingUsers.values()) {
+                        this.sendLivekitDisconnectMessage(receivingUser);
+                    }
+                    await this.livekitService.deleteRoom(this.space.getSpaceName());
+                });
             }
         }).catch((error) => {
             console.error(`Error in deleteUser for ${user.spaceUserId}:`, error);
@@ -256,7 +280,10 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
     }
 
     private async sendLivekitInvitationMessage(user: SpaceUser): Promise<void> {
+        if (this.disposed || !this.space.getUser(user.spaceUserId)) return;
         const token = await this.livekitService.generateToken(this.space.getSpaceName(), user);
+        if (this.disposed || (this.roomLease && !this.roomLease.isCurrent) || !this.space.getUser(user.spaceUserId))
+            return;
 
         this.space.dispatchPrivateEvent({
             spaceName: this.space.getSpaceName(),
@@ -278,6 +305,12 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
         meetingConnectionRestartMessage: MeetingConnectionRestartMessage,
         senderUserId: string,
     ): void {
+        if (
+            this.disposed ||
+            !this.roomLease?.isCurrent ||
+            (!this.streamingUsers.has(senderUserId) && !this.receivingUsers.has(senderUserId))
+        )
+            return;
         const senderUser = this.space.getUser(senderUserId);
         if (!senderUser) {
             console.warn("User not found in space", senderUserId);
@@ -296,17 +329,22 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
     }
 
     cleanup(): void {
-        for (const user of this.streamingUsers.values()) {
-            this.deleteUser(user);
-        }
-        for (const user of this.receivingUsers.values()) {
-            this.deleteUserFromNotify(user);
-        }
-        this.livekitService.deleteRoom(this.space.getSpaceName()).catch((error) => {
-            console.error(error);
-            Sentry.captureException(error);
-        });
+        if (this.disposed) return;
+        this.disposed = true;
+        // finalizeSwitchMessage already retires client connections. Do not send old disconnect
+        // messages that could arrive after a replacement strategy has invited the same user.
+        this.streamingUsers.clear();
+        this.receivingUsers.clear();
+        this.usersReady.clear();
+        this.createRoomPromise = null;
+        this.roomLease
+            ?.release(() => this.livekitService.deleteRoom(this.space.getSpaceName()))
+            .catch((error) => {
+                console.error("Error releasing Livekit room", error);
+                Sentry.captureException(error);
+            });
     }
+
     async startRecording(user: SpaceUser, recordingSessionId: string): Promise<RecordingStartInfo> {
         if (!this.createRoomPromise) {
             console.warn("Room not created yet");

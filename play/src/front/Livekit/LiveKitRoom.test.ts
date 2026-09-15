@@ -1,3 +1,4 @@
+import { DisconnectReason } from "livekit-client";
 import { Subject } from "rxjs";
 import { writable } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -77,6 +78,30 @@ vi.mock("../Space/SpacePeerManager/SpacePeerManager", () => ({}));
 describe("LiveKitRoom", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+    });
+
+    it("requests recovery when an active room is unexpectedly deleted", () => {
+        const recover = vi.fn();
+        const room = createLiveKitRoom({
+            screenSharingLocalStreamStore: writable(undefined),
+            shouldPublishScreenShareStore: writable(false),
+            recover,
+        });
+        room["handleDisconnected"](DisconnectReason.ROOM_DELETED);
+        expect(recover).toHaveBeenCalledOnce();
+    });
+    it("does not recover a deleted room after leaving the space", () => {
+        const recover = vi.fn();
+        const controller = new AbortController();
+        const room = createLiveKitRoom({
+            screenSharingLocalStreamStore: writable(undefined),
+            shouldPublishScreenShareStore: writable(false),
+            recover,
+            signal: controller.signal,
+        });
+        controller.abort();
+        room["handleDisconnected"](DisconnectReason.ROOM_DELETED);
+        expect(recover).not.toHaveBeenCalled();
     });
 
     it("registers one retry that restarts blocked LiveKit audio", async () => {
@@ -161,9 +186,13 @@ describe("LiveKitRoom", () => {
 function createLiveKitRoom({
     screenSharingLocalStreamStore,
     shouldPublishScreenShareStore,
+    recover,
+    signal = new AbortController().signal,
 }: {
     screenSharingLocalStreamStore: Readable<LocalStreamStoreValue | undefined>;
     shouldPublishScreenShareStore: Readable<boolean>;
+    recover?: () => void;
+    signal?: AbortSignal;
 }): LiveKitRoom {
     return new LiveKitRoom(
         "wss://livekit.example.com",
@@ -171,7 +200,7 @@ function createLiveKitRoom({
         createSpace(shouldPublishScreenShareStore),
         createStreamableSubjects(),
         writable(new Set<string>()),
-        new AbortController().signal,
+        signal,
         screenSharingLocalStreamStore,
         writable(undefined),
         {
@@ -179,6 +208,7 @@ function createLiveKitRoom({
             decrement: vi.fn(),
         },
         writable({ type: "success", stream: undefined }),
+        recover,
     );
 }
 

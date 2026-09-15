@@ -98,7 +98,7 @@ const windowEnvJs = `window.env = ${JSON.stringify(
 html = html.replace(/\{\{\{[^}]*script[^}]*\}\}\}/g, windowEnvJs);
 
 // Set meta variables
-html = html.replace(/\{\{ title \}\}/g, 'WorkAdventure - Vings Workplace');
+html = html.replace(/\{\{ title \}\}/g, 'ConnectiumAI Office | Virtual Workplace');
 html = html.replace(/\{\{ description \}\}/g, 'A collaborative virtual office presented as a 16-bit RPG video game');
 html = html.replace(/\{\{ author \}\}/g, 'WorkAdventure');
 html = html.replace(/\{\{ provider \}\}/g, 'WorkAdventure');
