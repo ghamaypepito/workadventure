@@ -8,6 +8,7 @@ import { LivekitConnection } from "./LivekitConnection";
 
 const rooms = vi.hoisted(() => ({
     instances: [] as Array<{
+        unexpectedDisconnect: () => void;
         destroy: ReturnType<typeof vi.fn>;
         joinRoom: ReturnType<typeof vi.fn<() => Promise<void>>>;
         dispatchStream: ReturnType<typeof vi.fn>;
@@ -21,7 +22,9 @@ vi.mock("./LiveKitRoom", () => ({
         prepareConnection = vi.fn().mockResolvedValue(undefined);
         joinRoom = vi.fn().mockResolvedValue(undefined);
         dispatchStream = vi.fn().mockResolvedValue(undefined);
-        constructor() {
+        unexpectedDisconnect: () => void;
+        constructor(...args: unknown[]) {
+            this.unexpectedDisconnect = typeof args[10] === "function" ? (args[10] as () => void) : () => {};
             rooms.instances.push(this);
         }
     },
@@ -35,12 +38,15 @@ describe("LivekitConnection recovery cleanup", () => {
     afterEach(() => {
         rooms.instances.length = 0;
         vi.restoreAllMocks();
+        vi.useRealTimers();
     });
 
     function setup() {
         const invitations = new Subject<unknown>();
         const disconnects = new Subject<unknown>();
+        const emitBackEvent = vi.fn();
         const space = {
+            emitBackEvent,
             observePrivateEvent: (type: CommunicationMessageType) =>
                 type === CommunicationMessageType.LIVEKIT_INVITATION_MESSAGE ? invitations : disconnects,
         } as unknown as SpaceInterface;
@@ -52,8 +58,63 @@ describe("LivekitConnection recovery cleanup", () => {
         );
         const invite = () =>
             invitations.next({ livekitInvitationMessage: { serverUrl: "wss://test", token: "token" } });
-        return { connection, invitations, disconnects, invite };
+        return { connection, invitations, disconnects, invite, emitBackEvent };
     }
+
+    it("bounds recovery requests even when replacement rooms fail repeatedly", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        const f = setup();
+        f.invite();
+        rooms.instances[0].unexpectedDisconnect();
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(f.emitBackEvent).toHaveBeenCalledTimes(1);
+        f.invite();
+        rooms.instances[1].unexpectedDisconnect();
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(f.emitBackEvent).toHaveBeenCalledTimes(2);
+        f.invite();
+        rooms.instances[2].unexpectedDisconnect();
+        await vi.advanceTimersByTimeAsync(4000);
+        expect(f.emitBackEvent).toHaveBeenCalledTimes(3);
+        f.invite();
+        rooms.instances[3].unexpectedDisconnect();
+        await vi.advanceTimersByTimeAsync(60000);
+        expect(f.emitBackEvent).toHaveBeenCalledTimes(3);
+        f.connection.destroy();
+    });
+    it("retries an unanswered recovery request but cancels on a fresh invitation", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        const f = setup();
+        f.invite();
+        rooms.instances[0].unexpectedDisconnect();
+        await vi.advanceTimersByTimeAsync(3000);
+        expect(f.emitBackEvent).toHaveBeenCalledTimes(2);
+        f.invite();
+        await vi.advanceTimersByTimeAsync(10000);
+        expect(f.emitBackEvent).toHaveBeenCalledTimes(2);
+        f.connection.destroy();
+    });
+    it("cancels pending recovery when the communication state shuts down", async () => {
+        vi.useFakeTimers();
+        const f = setup();
+        f.invite();
+        rooms.instances[0].unexpectedDisconnect();
+        f.connection.shutdown();
+        await vi.advanceTimersByTimeAsync(10000);
+        expect(f.emitBackEvent).not.toHaveBeenCalled();
+        f.connection.destroy();
+    });
+
+    it("ignores a late recovery invitation after shutdown", () => {
+        const f = setup();
+        f.invite();
+        f.connection.shutdown();
+        f.invite();
+        expect(rooms.instances).toHaveLength(1);
+        f.connection.destroy();
+    });
 
     it("closes the previous room when a recovery invitation replaces it", () => {
         vi.spyOn(console, "error").mockImplementation(() => {});

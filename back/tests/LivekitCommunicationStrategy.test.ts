@@ -12,8 +12,8 @@ function createUser(spaceUserId: string): SpaceUser {
 }
 
 describe("LivekitCommunicationStrategy", () => {
-    it("stops recording through the server path when the last streaming user leaves",async () => {
-        const dispatchPrivateEvent = vi.fn();
+    it("stops recording through the server path when the last streaming user leaves", async () => {
+        const dispatchPrivateEvent = vi.fn<ICommunicationSpace["dispatchPrivateEvent"]>();
         const stopRecordingByServer = vi.fn().mockResolvedValue(undefined);
 
         const space: ICommunicationSpace = {
@@ -32,6 +32,7 @@ describe("LivekitCommunicationStrategy", () => {
 
         const livekitService = {
             deleteRoom: vi.fn().mockResolvedValue(undefined),
+            getLivekitFrontendUrl: () => "wss://test.invalid",
         };
 
         const strategy = new LivekitCommunicationStrategy(space, livekitService as never);
@@ -76,6 +77,7 @@ describe("LivekitCommunicationStrategy", () => {
 
         const livekitService = {
             deleteRoom: vi.fn().mockResolvedValue(undefined),
+            getLivekitFrontendUrl: () => "wss://test.invalid",
         };
 
         const strategy = new LivekitCommunicationStrategy(space, livekitService as never);
@@ -101,7 +103,7 @@ describe("LivekitCommunicationStrategy", () => {
                     strategy as unknown as {
                         streamingUsers: Map<string, SpaceUser>;
                     }
-                ).streamingUsers.has(secondStreamer.spaceUserId)
+                ).streamingUsers.has(secondStreamer.spaceUserId),
             ).toBe(true);
         });
 
@@ -110,7 +112,7 @@ describe("LivekitCommunicationStrategy", () => {
     });
 
     it("re-sends a fresh invitation when a user re-registers as receiving without an intervening removal", async () => {
-        const dispatchPrivateEvent = vi.fn();
+        const dispatchPrivateEvent = vi.fn<ICommunicationSpace["dispatchPrivateEvent"]>();
 
         const space: ICommunicationSpace = {
             getAllUsers: () => [],
@@ -137,6 +139,7 @@ describe("LivekitCommunicationStrategy", () => {
         (strategy as unknown as { createRoomPromise: Promise<void> }).createRoomPromise = Promise.resolve();
 
         const watcher = createUser("watcher-1");
+        vi.mocked(space.getUser).mockReturnValue(watcher);
 
         // First registration - a normal join/proximity-enter.
         await strategy.addUserToNotify(watcher);

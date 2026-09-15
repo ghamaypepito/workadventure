@@ -82,6 +82,7 @@ export class LiveKitRoom implements LiveKitRoomInterface {
             decrement: decrementLivekitRoomCount,
         },
         private _localStreamStore: Readable<LocalStreamStoreValue> = localStreamStoreForPublishing,
+        private onUnexpectedDisconnect?: () => void,
     ) {
         this._livekitRoomCounter.increment();
     }
@@ -557,6 +558,17 @@ export class LiveKitRoom implements LiveKitRoomInterface {
     }
 
     private handleDisconnected(reason?: DisconnectReason) {
+        if (this.abortSignal.aborted) return;
+        if (
+            this.onUnexpectedDisconnect &&
+            (reason === DisconnectReason.ROOM_DELETED ||
+                reason === DisconnectReason.ROOM_CLOSED ||
+                reason === DisconnectReason.STATE_MISMATCH ||
+                reason === DisconnectReason.JOIN_FAILURE)
+        ) {
+            this.onUnexpectedDisconnect();
+            return;
+        }
         const disconnectReasonLabel = this.getDisconnectReasonLabel(reason);
 
         if (reason === DisconnectReason.ROOM_CLOSED || reason === DisconnectReason.ROOM_DELETED) {

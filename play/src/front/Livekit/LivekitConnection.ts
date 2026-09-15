@@ -22,6 +22,42 @@ export class LivekitConnection {
     private readonly unsubscribers: Subscription[] = [];
     private livekitRoom: LiveKitRoom | undefined;
     private shutdownAbortController: AbortController | undefined;
+    private stopped = false;
+    private recoveryTimer: ReturnType<typeof setTimeout> | undefined;
+    private recoveryAttempts: number[] = [];
+
+    private cancelRecovery(): void {
+        if (this.recoveryTimer !== undefined) clearTimeout(this.recoveryTimer);
+        this.recoveryTimer = undefined;
+    }
+
+    private requestRecovery(signal: AbortSignal): void {
+        if (signal.aborted || this.recoveryTimer !== undefined) return;
+        this.recoveryAttempts = this.recoveryAttempts.filter((time) => Date.now() - time < 60_000);
+        if (this.recoveryAttempts.length >= 3) {
+            console.warn("LiveKit recovery paused after three attempts in one minute");
+            return;
+        }
+        this.recoveryTimer = setTimeout(
+            () => {
+                this.recoveryTimer = undefined;
+                if (signal.aborted) return;
+                this.recoveryAttempts.push(Date.now());
+                try {
+                    this.space.emitBackEvent({
+                        event: { $case: "meetingConnectionRestartMessage", meetingConnectionRestartMessage: {} },
+                    });
+                } catch (error) {
+                    console.error("Error requesting LiveKit recovery", error);
+                    Sentry.captureException(error);
+                }
+                // A missing invitation must not leave the client stuck. A fresh invitation cancels this timer.
+                this.requestRecovery(signal);
+            },
+            1000 * 2 ** this.recoveryAttempts.length,
+        );
+    }
+
     private streamToDispatch: MediaStream | undefined;
     constructor(
         private space: SpaceInterface,
@@ -46,6 +82,10 @@ export class LivekitConnection {
             this._blockedUsersStore,
             shutdownAbortSignal,
             this._screenSharingLocalStreamStore,
+            undefined,
+            undefined,
+            undefined,
+            () => this.requestRecovery(shutdownAbortSignal),
         );
         this._streamingMegaphoneStore.set(true);
         return this.livekitRoom;
@@ -54,6 +94,8 @@ export class LivekitConnection {
     private initialize() {
         this.unsubscribers.push(
             this.space.observePrivateEvent(CommunicationMessageType.LIVEKIT_INVITATION_MESSAGE).subscribe((message) => {
+                if (this.stopped) return;
+                this.cancelRecovery();
                 if (this.shutdownAbortController) {
                     console.error("Livekit invitation already triggered for this LivekitState");
                     Sentry.captureException(new Error("Livekit invitation already triggered for this LivekitState"));
@@ -96,6 +138,7 @@ export class LivekitConnection {
         );
         this.unsubscribers.push(
             this.space.observePrivateEvent(CommunicationMessageType.LIVEKIT_DISCONNECT_MESSAGE).subscribe((message) => {
+                this.cancelRecovery();
                 if (!this.livekitRoom) {
                     console.error("LivekitRoom not found");
                     // Sentry.captureException(new Error("LivekitRoom not found"));
@@ -125,6 +168,7 @@ export class LivekitConnection {
     }
 
     destroy() {
+        this.cancelRecovery();
         try {
             this.shutdownAbortController?.abort();
             this.shutdownAbortController = undefined;
@@ -149,6 +193,8 @@ export class LivekitConnection {
      * but any asynchronous operation receiving a new stream should be ignored after this call.
      */
     shutdown() {
+        this.stopped = true;
+        this.cancelRecovery();
         this.shutdownAbortController?.abort();
         this.shutdownAbortController = undefined;
     }
