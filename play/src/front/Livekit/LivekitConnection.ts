@@ -1,5 +1,5 @@
 import Debug from "debug";
-import { ConnectionError } from "livekit-client";
+import { ConnectionError, ConnectionErrorReason } from "livekit-client";
 import type { Subscription } from "rxjs";
 import * as Sentry from "@sentry/svelte";
 import type { Readable } from "svelte/store";
@@ -36,6 +36,14 @@ export class LivekitConnection {
         this.recoveryAttempts = this.recoveryAttempts.filter((time) => Date.now() - time < 60_000);
         if (this.recoveryAttempts.length >= 3) {
             console.warn("LiveKit recovery paused after three attempts in one minute");
+            // Keep the rate limit without leaving an active call permanently stranded.
+            this.recoveryTimer = setTimeout(
+                () => {
+                    this.recoveryTimer = undefined;
+                    this.requestRecovery(signal);
+                },
+                Math.max(1, this.recoveryAttempts[0] + 60_000 - Date.now()),
+            );
             return;
         }
         this.recoveryTimer = setTimeout(
@@ -124,6 +132,7 @@ export class LivekitConnection {
                     }
                     this.streamToDispatch = undefined;
                 })().catch((err) => {
+                    if (signal.aborted) return;
                     if (err instanceof ConnectionError && err.message === "Client initiated disconnect") {
                         // This error is triggered when the "destroy" method is called before Livekit connection completes.
                         // It can happen when the user leaves the space just after joining it.
@@ -133,6 +142,15 @@ export class LivekitConnection {
                     }
                     console.error("An error occurred in LivekitConnection initialize", err);
                     Sentry.captureException(err);
+                    // A failed join may reject without emitting a RoomEvent.Disconnected.
+                    if (
+                        err instanceof ConnectionError &&
+                        (err.reason === ConnectionErrorReason.Timeout ||
+                            err.reason === ConnectionErrorReason.ServerUnreachable ||
+                            err.reason === ConnectionErrorReason.WebSocket)
+                    ) {
+                        this.requestRecovery(signal);
+                    }
                 });
             }),
         );
