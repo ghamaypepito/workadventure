@@ -126,6 +126,7 @@ export class LiveKitRoom implements LiveKitRoomInterface {
     }
 
     private joinRoomCalled = false;
+    private hasConnected = false;
 
     public async joinRoom() {
         if (this.joinRoomCalled) {
@@ -142,6 +143,7 @@ export class LiveKitRoom implements LiveKitRoomInterface {
         await room.connect(this.serverUrl, this.token, {
             autoSubscribe: false,
         });
+        this.hasConnected = true;
         this.handleAudioPlaybackStatusChanged();
         if (this.abortSignal.aborted) {
             await room.disconnect();
@@ -561,11 +563,17 @@ export class LiveKitRoom implements LiveKitRoomInterface {
         if (this.abortSignal.aborted) return;
         if (
             this.onUnexpectedDisconnect &&
-            (reason === DisconnectReason.ROOM_DELETED ||
+            ((reason === undefined && this.hasConnected) ||
+                reason === DisconnectReason.ROOM_DELETED ||
                 reason === DisconnectReason.ROOM_CLOSED ||
                 reason === DisconnectReason.STATE_MISMATCH ||
-                reason === DisconnectReason.JOIN_FAILURE)
+                reason === DisconnectReason.JOIN_FAILURE ||
+                reason === DisconnectReason.SIGNAL_CLOSE ||
+                reason === DisconnectReason.CONNECTION_TIMEOUT ||
+                reason === DisconnectReason.MEDIA_FAILURE ||
+                reason === DisconnectReason.SERVER_SHUTDOWN)
         ) {
+            console.warn("Requesting recovery after LiveKit disconnect", this.getDisconnectReasonLabel(reason));
             this.onUnexpectedDisconnect();
             return;
         }

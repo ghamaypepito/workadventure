@@ -1,4 +1,5 @@
 import { Subject } from "rxjs";
+import { ConnectionError } from "livekit-client";
 import { writable } from "svelte/store";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SpaceInterface } from "../Space/SpaceInterface";
@@ -79,7 +80,21 @@ describe("LivekitConnection recovery cleanup", () => {
         expect(f.emitBackEvent).toHaveBeenCalledTimes(3);
         f.invite();
         rooms.instances[3].unexpectedDisconnect();
-        await vi.advanceTimersByTimeAsync(60000);
+        await vi.advanceTimersByTimeAsync(54000);
+        expect(f.emitBackEvent).toHaveBeenCalledTimes(3);
+        await vi.advanceTimersByTimeAsync(4000);
+        expect(f.emitBackEvent).toHaveBeenCalledTimes(4);
+        f.connection.destroy();
+    });
+    it("cancels cooldown recovery when the user leaves the call", async () => {
+        vi.useFakeTimers();
+        const f = setup();
+        f.invite();
+        rooms.instances[0].unexpectedDisconnect();
+        await vi.advanceTimersByTimeAsync(7000);
+        expect(f.emitBackEvent).toHaveBeenCalledTimes(3);
+        f.disconnects.next({});
+        await vi.advanceTimersByTimeAsync(120000);
         expect(f.emitBackEvent).toHaveBeenCalledTimes(3);
         f.connection.destroy();
     });
@@ -94,6 +109,26 @@ describe("LivekitConnection recovery cleanup", () => {
         f.invite();
         await vi.advanceTimersByTimeAsync(10000);
         expect(f.emitBackEvent).toHaveBeenCalledTimes(2);
+        f.connection.destroy();
+    });
+    it("requests a fresh invitation when joining times out without a disconnect event", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        const f = setup();
+        f.invite();
+        rooms.instances[0].joinRoom.mockRejectedValueOnce(ConnectionError.timeout("Timed out"));
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(f.emitBackEvent).toHaveBeenCalledOnce();
+        f.connection.destroy();
+    });
+    it("does not retry a rejected authorization", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        const f = setup();
+        f.invite();
+        rooms.instances[0].joinRoom.mockRejectedValueOnce(ConnectionError.notAllowed("Denied", 403));
+        await vi.advanceTimersByTimeAsync(120000);
+        expect(f.emitBackEvent).not.toHaveBeenCalled();
         f.connection.destroy();
     });
     it("cancels pending recovery when the communication state shuts down", async () => {

@@ -80,15 +80,35 @@ describe("LiveKitRoom", () => {
         vi.clearAllMocks();
     });
 
-    it("requests recovery when an active room is unexpectedly deleted", () => {
+    it.each([
+        DisconnectReason.ROOM_DELETED,
+        DisconnectReason.SIGNAL_CLOSE,
+        DisconnectReason.CONNECTION_TIMEOUT,
+        DisconnectReason.MEDIA_FAILURE,
+        DisconnectReason.SERVER_SHUTDOWN,
+    ])("requests recovery after recoverable disconnect %s", (reason) => {
         const recover = vi.fn();
         const room = createLiveKitRoom({
             screenSharingLocalStreamStore: writable(undefined),
             shouldPublishScreenShareStore: writable(false),
             recover,
         });
-        room["handleDisconnected"](DisconnectReason.ROOM_DELETED);
+        room["handleDisconnected"](reason);
         expect(recover).toHaveBeenCalledOnce();
+    });
+    it.each([
+        DisconnectReason.CLIENT_INITIATED,
+        DisconnectReason.PARTICIPANT_REMOVED,
+        DisconnectReason.DUPLICATE_IDENTITY,
+    ])("does not rejoin after intentional or superseded disconnect %s", (reason) => {
+        const recover = vi.fn();
+        const room = createLiveKitRoom({
+            screenSharingLocalStreamStore: writable(undefined),
+            shouldPublishScreenShareStore: writable(false),
+            recover,
+        });
+        room["handleDisconnected"](reason);
+        expect(recover).not.toHaveBeenCalled();
     });
     it("does not recover a deleted room after leaving the space", () => {
         const recover = vi.fn();
@@ -101,6 +121,36 @@ describe("LiveKitRoom", () => {
         });
         controller.abort();
         room["handleDisconnected"](DisconnectReason.ROOM_DELETED);
+        expect(recover).not.toHaveBeenCalled();
+    });
+    it("recovers SDK retry exhaustion without a disconnect reason after an established call", async () => {
+        const recover = vi.fn();
+        const room = createLiveKitRoom({
+            screenSharingLocalStreamStore: writable(undefined),
+            shouldPublishScreenShareStore: writable(false),
+            recover,
+        });
+        room["room"] = {
+            connect: vi.fn().mockResolvedValue(undefined),
+            on: vi.fn(),
+            off: vi.fn(),
+            disconnect: vi.fn().mockResolvedValue(undefined),
+            canPlaybackAudio: true,
+            remoteParticipants: new Map(),
+        } as never;
+        await room.joinRoom();
+        room["handleDisconnected"]();
+        expect(recover).toHaveBeenCalledOnce();
+        room.destroy();
+    });
+    it("does not recover a reasonless failure before the initial join succeeds", () => {
+        const recover = vi.fn();
+        const room = createLiveKitRoom({
+            screenSharingLocalStreamStore: writable(undefined),
+            shouldPublishScreenShareStore: writable(false),
+            recover,
+        });
+        room["handleDisconnected"]();
         expect(recover).not.toHaveBeenCalled();
     });
 
@@ -217,6 +267,7 @@ function createSpace(shouldPublishScreenShareStore: Readable<boolean>): SpaceInt
         isStreamingVideoStore: writable(false),
         isStreamingAudioStore: writable(false),
         shouldPublishScreenShareStore,
+        observeUserJoined: new Subject(),
     } as unknown as SpaceInterface;
 }
 
