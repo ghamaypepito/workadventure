@@ -1005,23 +1005,31 @@ export class ProximityChatRoom implements ChatRoom {
             this.scriptingInputAudioStreamManager?.close();
         }
 
-        this.joinSpaceAbortController = new AbortController();
+        const joinAbortController = new AbortController();
+        this.joinSpaceAbortController = joinAbortController;
         const joinSignal =
-            signal !== undefined
-                ? abortAny([this.joinSpaceAbortController.signal, signal])
-                : this.joinSpaceAbortController.signal;
+            signal !== undefined ? abortAny([joinAbortController.signal, signal]) : joinAbortController.signal;
 
+        let joinedSpace: SpaceInterface;
         try {
-            this._space = await this.spaceRegistry.joinSpace(spaceName, filterType, propertiesToSync, joinSignal, {
+            joinedSpace = await this.spaceRegistry.joinSpace(spaceName, filterType, propertiesToSync, joinSignal, {
                 canRecord: WAMSettingsUtils.canStartRecording(this.wamSettings, this.tags, localUserStore.isLogged()),
             });
         } catch (e) {
-            this.joinSpaceAbortController = undefined;
+            // Only clear the controller if it is still ours: a newer join may have replaced it.
+            if (this.joinSpaceAbortController === joinAbortController) {
+                this.joinSpaceAbortController = undefined;
+            }
             throw e;
         }
 
-        const spaceForThisJoin = this._space;
-        await this.throwIfAborted(joinSignal, spaceForThisJoin);
+        // Check for abortion BEFORE publishing the space as this._space. A join that was superseded while
+        // awaiting the registry used to assign this._space anyway, overwriting the space a newer join had
+        // just set. The newer space was then still joined in the registry (with its LiveKit room) but no
+        // longer tracked here, so nothing ever left it and the browser stayed in that call indefinitely.
+        await this.throwIfAborted(joinSignal, joinedSpace);
+        this._space = joinedSpace;
+        const spaceForThisJoin = joinedSpace;
 
         this.isChatDisabled.set(disableChat);
         this.intentionallyClosed.set(false);
@@ -1409,6 +1417,8 @@ export class ProximityChatRoom implements ChatRoom {
         // Capture space before aborting so we still run full leave (UI + leaveSpace) even if
         // joinSpace's cleanup runs first and clears this._space.
         const space = this._space;
+        // An aborted join cleans up (and leaves) its own space, so it owns that cleanup, not us.
+        const abortedAJoin = this.joinSpaceAbortController !== undefined;
         if (this.joinSpaceAbortController) {
             this.joinSpaceAbortController.abort(new AbortError("Leave space called while joining a space"));
             this.joinSpaceAbortController = undefined;
@@ -1420,12 +1430,18 @@ export class ProximityChatRoom implements ChatRoom {
         }
         if (!space) {
             console.error("Trying to leave a space that is not joined");
+            if (!abortedAJoin) {
+                await this.leaveUntrackedSpace(spaceName);
+            }
             return false;
         }
         if (space.getName() !== spaceName) {
             console.error(
                 "Trying to leave a space different from the one joined : " + space.getName() + " !== " + spaceName,
             );
+            if (!abortedAJoin) {
+                await this.leaveUntrackedSpace(spaceName);
+            }
             return false;
         }
 
@@ -1515,6 +1531,31 @@ export class ProximityChatRoom implements ChatRoom {
             Sentry.captureException(error);
         }
         return true;
+    }
+
+    /**
+     * Leaves a bubble space the server asked us to leave, when this room is no longer tracking it.
+     *
+     * The default proximity room is reused for every bubble and only tracks one space at a time. A
+     * join/leave race can make it lose track of a bubble space that is still joined in the registry
+     * (and therefore still holds its SpacePeerManager and LiveKit room). The server's leave request for
+     * that bubble then used to be ignored as "a space different from the one joined", so the browser
+     * stayed connected to the old LiveKit room indefinitely - still publishing into it, and hearing
+     * nothing in its next bubble. The server's own livekitDisconnectMessage cannot rescue it either:
+     * it is sent after the user is removed from the space and is dropped as "recipient not present".
+     */
+    private async leaveUntrackedSpace(spaceName: string): Promise<void> {
+        if (!this.isDefaultProximityRoom() || !this.spaceRegistry.exist(spaceName)) {
+            return;
+        }
+        console.warn(`Leaving untracked proximity space "${spaceName}" so its call does not stay connected`);
+        Sentry.captureMessage("ProximityChatRoom: leaving untracked proximity space");
+        try {
+            await this.spaceRegistry.leaveSpace(this.spaceRegistry.get(spaceName));
+        } catch (error) {
+            console.error("Error leaving untracked space: ", error);
+            Sentry.captureException(error);
+        }
     }
 
     private restoreChatState() {
