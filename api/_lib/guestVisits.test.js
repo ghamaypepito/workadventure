@@ -68,6 +68,8 @@ async function runtime(states) {
     .map((m) => m[1])
     .join("\n");
   const context = {
+    URL,
+    window: { location: { origin: "https://office.example" } },
     console,
     setTimeout: (fn) => timers.push(fn),
     sessionStorage: {
@@ -298,4 +300,31 @@ test("guest picker shows avatar and first name while preserving host selection",
   assert.equal(dom.window.document.querySelector('input:checked').value, 'host@example.com');
   assert.equal(dom.window.document.querySelectorAll('.person').length, 2);
   dom.window.close();
+});
+
+test("host notification uses the office origin even when the map URL is relative", async () => {
+  const html = fs.readFileSync(path.join(__dirname, "../../play/public/scripts/admission-script.html"), "utf8");
+  const script = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map(m => m[1]).join("\n");
+  const opened = [];
+  const context = {
+    URL, console, setTimeout() {}, setInterval() {},
+    window: {location: {origin: "https://office.example"}, addEventListener() {}},
+    fetch: async (url) => ({ok: true, json: async () =>
+      url.includes("session-status") ? {authenticated:true,user:{}} :
+      url === "/api/guests" ? {visits:[{id:"pending-guest"}]} : {room:null}}),
+    WA: {
+      onInit: () => Promise.resolve(),
+      controls: {disablePlayerControls(){}, restorePlayerControls(){}},
+      player: {name:"Host", uuid:"host", getWokaPicture:async()=>null},
+      room: {onEnterZone(){},onLeaveZone(){}},
+      ui:{modal:{openModal: event=>opened.push(event)}},
+      nav:{goToPage:()=>assert.fail("Host initialization failed")},
+    },
+  };
+  vm.runInNewContext(script, context);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(opened.length,1);
+  assert.equal(opened[0].src,"https://office.example/scripts/guest-requests.html");
+  // The modal must normalize a relative map URL before using it as a URL base.
+  assert.equal(new URL(opened[0].src,new URL("./map.tmj","https://office.example/~/office/map.wam")).href,opened[0].src);
 });

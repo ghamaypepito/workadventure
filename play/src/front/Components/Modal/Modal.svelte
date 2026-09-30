@@ -51,7 +51,10 @@
     });
 
     let modalUrl = $modalIframeStore
-        ? new URL($modalIframeStore.src, gameManager.currentStartedRoom.mapUrl).toString()
+        ? new URL(
+              $modalIframeStore.src,
+              new URL(gameManager.currentStartedRoom.mapUrl, window.location.href),
+          ).toString()
         : undefined;
 
     let isMobile = $state(isMediaBreakpointUp("md"));
