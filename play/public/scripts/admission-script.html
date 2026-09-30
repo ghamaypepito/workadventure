@@ -27,7 +27,7 @@
                 const { visits } = await guestApi({ action: 'pending' });
                 if (visits.some(visit => !notified.has(visit.id))) {
                     visits.forEach(visit => notified.add(visit.id));
-                    WA.ui.modal.openModal({ src: new URL('/scripts/guest-requests.html', window.location.origin).toString(), title: 'Guest entry requests', position: 'center', allowApi: true, closable: true });
+                    WA.ui.modal.openModal({ src: new URL('/scripts/guest-requests.html', window.location.origin).toString(), title: 'Guest entry requests', position: 'center', allowApi: true, allowFullScreen: false, closable: true });
                 }
                 const active = new Set(visits.map(visit => visit.id));
                 for (const id of notified) if (!active.has(id)) notified.delete(id);

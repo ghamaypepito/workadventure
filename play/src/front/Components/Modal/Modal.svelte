@@ -69,6 +69,8 @@
     class="menu-container fixed h-dvh w-dvw z-[2000] pointer-events-auto top-0 transition-all {isMobile
         ? 'mobile'
         : $modalIframeStore?.position} {isFullScreened ? 'fullscreened' : ''}"
+    class:guest-entry-notification={modalUrl !== undefined &&
+        new URL(modalUrl).pathname === "/scripts/guest-requests.html"}
     bind:this={mainModal}
 >
     <div class="w-full h-full bg-contrast/80 backdrop-blur rounded" transition:blur={{ amount: 10, duration: 250 }}>
@@ -131,6 +133,22 @@
 </div>
 
 <style>
+    .menu-container.guest-entry-notification {
+        width: min(520px, calc(100vw - 48px)) !important;
+        height: min(440px, calc(100dvh - 80px)) !important;
+        top: 50% !important;
+        left: 50% !important;
+        right: auto !important;
+        bottom: auto !important;
+        margin: 0 !important;
+        transform: translate(-50%, -50%);
+        border-radius: 14px;
+        box-shadow: 0 20px 60px rgb(0 0 0 / 35%);
+    }
+    .guest-entry-notification > div,
+    .guest-entry-notification iframe {
+        border-radius: 14px;
+    }
     .menu-container {
         &.mobile {
             width: 100% !important;
