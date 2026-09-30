@@ -48,6 +48,7 @@
             p {
                 line-height: 1.5;
             }
+            #host { max-height: min(320px, 38vh); overflow-y: auto; scrollbar-gutter: stable; overscroll-behavior: contain; }
             .person { display:flex; align-items:center; gap:12px; padding:12px; margin:8px 0; border:1px solid #475569; border-radius:12px; cursor:pointer; background:#1e293b; }
             .person:has(input:checked) { border-color:#a5b4fc; background:#312e81; }
             .person:focus-within { outline:2px solid #a5b4fc; outline-offset:2px; }
@@ -88,15 +89,22 @@
                 if (!r.ok) throw new Error(data.error || "Unable to send request");
                 return data;
             }
+            let refreshing = false;
+            let waiting = false;
             async function members() {
+                if (refreshing || waiting) return;
+                refreshing = true;
                 try {
                     const data = await api({ action: "members" });
+                    if (waiting) return;
+                    const selected = host.querySelector('input:checked')?.value;
+                    const scrollTop = host.scrollTop;
                     host.replaceChildren();
-                    for (const person of data.members) {
+                    for (const person of data.members.sort((a, b) => String(a.name).localeCompare(String(b.name)))) {
                         const card = document.createElement("label"), radio = document.createElement("input"), avatar = document.createElement("span"), details = document.createElement("span"), name = document.createElement("span"), online = document.createElement("div");
                         const firstName = String(person.name || "Office member").trim().split(/\s+/)[0];
                         card.className = "person";
-                        radio.type = "radio"; radio.name = "host"; radio.value = person.email; radio.required = true;
+                        radio.type = "radio"; radio.name = "host"; radio.value = person.email; radio.required = true; radio.checked = person.email === selected;
                         avatar.className = "person-avatar"; avatar.textContent = firstName.charAt(0).toUpperCase();
                         if (typeof person.avatar === "string" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(person.avatar)) {
                             const img = document.createElement("img"); img.src = person.avatar; img.alt = "";
@@ -107,17 +115,21 @@
                         online.className = "online"; online.textContent = "● In the office";
                         details.append(name, online); card.append(radio, avatar, details); host.append(card);
                     }
+                    host.scrollTop = scrollTop;
                     send.disabled = !data.members.length;
                     statusEl.textContent = data.members.length
                         ? ""
                         : "No one is available yet. Refresh this list in a moment.";
                 } catch (e) {
                     statusEl.textContent = e.message;
+                } finally {
+                    refreshing = false;
                 }
             }
             form.addEventListener("submit", async (e) => {
                 e.preventDefault();
                 send.disabled = true;
+                waiting = true;
                 try {
                     const visit = JSON.parse(sessionStorage.getItem("wa:guest-visit"));
                     if (!visit) throw new Error("Entry session unavailable. Reopen the office.");
@@ -133,6 +145,7 @@
                 } catch (e) {
                     statusEl.textContent = e.message;
                     send.disabled = false;
+                    waiting = false;
                 }
             });
             document.getElementById("refresh").addEventListener("click", members);
@@ -152,6 +165,8 @@
                         return;
                     }
                     await members();
+                    const refreshTimer = setInterval(members, 10000);
+                    window.addEventListener("pagehide", () => clearInterval(refreshTimer), { once: true });
                 } catch (error) {
                     statusEl.textContent = error.message;
                 }

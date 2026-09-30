@@ -292,5 +292,10 @@ test("guest picker shows avatar and first name while preserving host selection",
   assert.equal(dom.window.document.querySelector('.person-name').textContent,"Ghamay");
   assert.ok(dom.window.document.querySelector('.person-avatar img'));
   assert.equal(dom.window.document.getElementById('host').textContent.includes('host@example.com'),false);
+  radio.checked = true;
+  dom.window.document.getElementById('refresh').click();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(dom.window.document.querySelector('input:checked').value, 'host@example.com');
+  assert.equal(dom.window.document.querySelectorAll('.person').length, 2);
   dom.window.close();
 });
