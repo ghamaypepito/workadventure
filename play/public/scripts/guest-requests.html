@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Guest entry requests</title>
+        <style>
+            body {
+                background: #0f172a;
+                color: #e2e8f0;
+                font: 16px system-ui;
+                padding: 24px;
+            }
+            article {
+                padding: 16px;
+                border: 1px solid #64748b;
+                border-radius: 12px;
+                margin-bottom: 16px;
+            }
+            p {
+                white-space: pre-wrap;
+                overflow-wrap: anywhere;
+            }
+            button {
+                padding: 12px;
+                margin: 8px;
+                border: 0;
+                border-radius: 8px;
+                cursor: pointer;
+            }
+            button:first-of-type {
+                background: #6366f1;
+                color: white;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Someone is here to see you</h1>
+        <p>Allow entry to let this guest move around the office.</p>
+        <div id="requests"></div>
+        <p id="status" role="status"></p>
+        <script>
+            const list = document.getElementById("requests"),
+                statusEl = document.getElementById("status");
+            async function api(body) {
+                const r = await fetch("/api/guests", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.error || "Request failed");
+                return d;
+            }
+            async function load() {
+                try {
+                    const { visits } = await api({ action: "pending" });
+                    list.replaceChildren();
+                    if (!visits.length) list.textContent = "No pending entry requests.";
+                    for (const visit of visits) {
+                        const row = document.createElement("article"),
+                            name = document.createElement("h2"),
+                            message = document.createElement("p");
+                        name.textContent = visit.name;
+                        message.textContent = visit.message || "I would like to enter the office.";
+                        row.append(name, message);
+                        for (const [action, label] of [
+                            ["approve", "Allow entry"],
+                            ["decline", "Decline"],
+                        ]) {
+                            const b = document.createElement("button");
+                            b.textContent = label;
+                            b.onclick = async () => {
+                                b.disabled = true;
+                                try {
+                                    await api({ action, id: visit.id });
+                                    statusEl.textContent =
+                                        action === "approve" ? "Entry allowed." : "Request declined.";
+                                    await load();
+                                } catch (e) {
+                                    statusEl.textContent = e.message;
+                                    b.disabled = false;
+                                }
+                            };
+                            row.append(b);
+                        }
+                        list.append(row);
+                    }
+                } catch (e) {
+                    statusEl.textContent = e.message;
+                }
+            }
+            load();
+            setInterval(load, 5000);
+        </script>
+    </body>
+</html>

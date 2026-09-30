@@ -8,6 +8,8 @@ import { asError } from "catch-unknown";
 import Debug from "debug";
 import { AxiosError } from "axios";
 import { AbortError } from "@workadventure/shared-utils/src/Abort/AbortError";
+import { getRedisClient } from "../services/RedisClient";
+import { validateGuestAccess, startGuestAccessWatch, isGuestRoom } from "../services/GuestAccess";
 import type { FetchMemberDataByUuidResponse } from "../services/AdminApi";
 import type { AdminSocketTokenData } from "../services/JWTTokenManager";
 import { jwtTokenManager, tokenInvalidException } from "../services/JWTTokenManager";
@@ -252,6 +254,40 @@ export class IoSocketController {
         });
     }
 
+    private readonly guestAccessTimers = new WeakMap<PusherWebSocket, () => void>();
+
+    private async checkGuestAccess(pass: string | undefined): Promise<boolean> {
+        const redis = await getRedisClient();
+        if (!redis) throw new Error("Guest admission requires Redis");
+        return validateGuestAccess(
+            pass,
+            (id) => redis.hGet("wa:guest-visits:v1", id).then((value) => value ?? null),
+            (email) => redis.get(`wa:active-session:${email.toLowerCase()}`),
+        );
+    }
+
+    private watchGuestAccess(socket: PusherWebSocket): void {
+        const stop = startGuestAccessWatch(
+            () => this.checkGuestAccess(socket.getUserData().guestAccess),
+            () => {
+                if (socket.isDisconnecting()) return;
+                socket.send({
+                    message: {
+                        $case: "sendUserMessage",
+                        sendUserMessage: {
+                            type: "guest_removed",
+                            message: "This visit has ended. You may request entry again.",
+                        },
+                    },
+                });
+                socketManager.cleanupSocket(socket);
+                socket.markPermanentlyDisconnected();
+                socket.end(1000, "Visit ended");
+            },
+        );
+        this.guestAccessTimers.set(socket, stop);
+    }
+
     ioConnection(): void {
         this.roomSocketController.ws("/ws/room", {
             /* Options */
@@ -261,6 +297,7 @@ export class IoSocketController {
             maxBackpressure: 65536, // Maximum 64kB of data in the buffer.
             queryValidator: z.object({
                 roomId: z.string(),
+                guestAccess: z.string().max(97).optional(),
                 characterTextureIds: z.union([z.string(), z.string().array()]).optional(),
                 companionTextureId: z.string().optional(),
                 lastCommandId: z.string().optional(),
@@ -289,6 +326,16 @@ export class IoSocketController {
                 const chatID = query.chatID ? query.chatID : undefined;
 
                 try {
+                    const admissionRequired = isGuestRoom(roomId, process.env.GUEST_ADMISSION_ROOM);
+                    if (admissionRequired && !(await this.checkGuestAccess(query.guestAccess))) {
+                        reject({
+                            rejected: true,
+                            reason: "tokenInvalid",
+                            message: "Guest entry approval is required",
+                            roomId,
+                        });
+                        return;
+                    }
                     if (version !== apiVersionHash) {
                         if (isAborted()) {
                             // If the response points to nowhere, don't attempt an upgrade
@@ -432,6 +479,7 @@ export class IoSocketController {
 
                     const socketData: ConnectingSocketData = {
                         rejected: false,
+                        guestAccess: admissionRequired ? query.guestAccess : undefined,
                         token: token && typeof token === "string" ? token : "",
                         roomId,
                         userId: undefined,
@@ -508,6 +556,7 @@ export class IoSocketController {
                 debug("WebSocket connection established");
 
                 await socketManager.handleConnectToRoom(socket);
+                if (socketData.guestAccess) this.watchGuestAccess(socket);
 
                 for (const loginMessage of socketData.loginMessages) {
                     socket.send({
@@ -1137,6 +1186,8 @@ export class IoSocketController {
                 });
             },
             close: (socket) => {
+                this.guestAccessTimers.get(socket)?.();
+                this.guestAccessTimers.delete(socket);
                 socketManager.cleanupSocket(socket);
             },
         });

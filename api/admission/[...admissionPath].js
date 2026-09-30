@@ -257,7 +257,8 @@ async function knownMembers(req, res) {
 async function heartbeatRoute(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
-    await heartbeat(user.email);
+    const profile = await readBody(req);
+    await heartbeat(user.email, profile || {});
     res.statusCode = 200;
     res.end(JSON.stringify({ success: true }));
 }

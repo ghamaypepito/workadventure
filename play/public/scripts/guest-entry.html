@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Request entry · ConnectiumAI Office</title>
+        <style>
+            body {
+                margin: 0;
+                background: #0f172a;
+                color: #e2e8f0;
+                font: 16px system-ui;
+                padding: 24px;
+            }
+            main {
+                max-width: 440px;
+                margin: auto;
+            }
+            label {
+                display: block;
+                margin: 20px 0 8px;
+            }
+            select,
+            textarea,
+            button {
+                box-sizing: border-box;
+                width: 100%;
+                padding: 12px;
+                border-radius: 8px;
+                font: inherit;
+            }
+            select,
+            textarea {
+                background: #1e293b;
+                color: inherit;
+                border: 1px solid #64748b;
+            }
+            button {
+                background: #6366f1;
+                color: white;
+                border: 0;
+                margin-top: 16px;
+                cursor: pointer;
+            }
+            button:disabled {
+                opacity: 0.5;
+            }
+            p {
+                line-height: 1.5;
+            }
+            .person { display:flex; align-items:center; gap:12px; padding:12px; margin:8px 0; border:1px solid #475569; border-radius:12px; cursor:pointer; background:#1e293b; }
+            .person:has(input:checked) { border-color:#a5b4fc; background:#312e81; }
+            .person:focus-within { outline:2px solid #a5b4fc; outline-offset:2px; }
+            .person input { accent-color:#818cf8; }
+            .person-avatar { width:48px; height:48px; flex-shrink:0; border-radius:12px; background:#475569; display:grid; place-items:center; overflow:hidden; }
+            .person-avatar img { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; }
+            .person-name { font-weight:600; }
+            .online { color:#86efac; font-size:13px; margin-top:4px; }
+            #status {
+                color: #cbd5e1;
+            }
+        </style>
+    </head>
+    <body>
+        <main>
+            <h1>Who are you visiting?</h1>
+            <p>Ask someone inside to let you in. You can move around the office after they approve your request.</p>
+            <form id="request">
+                <p id="host-label">Person in the office</p><div id="host" role="group" aria-labelledby="host-label"></div><label for="message">Message (optional)</label
+                ><textarea id="message" maxlength="500" rows="3" placeholder="Hi, I’m here for our meeting."></textarea
+                ><button id="send">Request entry</button>
+            </form>
+            <button id="refresh" type="button">Refresh people</button>
+            <p id="status" role="status" aria-live="polite"></p>
+        </main>
+        <script>
+            const statusEl = document.getElementById("status"),
+                form = document.getElementById("request"),
+                host = document.getElementById("host"),
+                send = document.getElementById("send");
+            async function api(body) {
+                const r = await fetch("/api/guests", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || "Unable to send request");
+                return data;
+            }
+            async function members() {
+                try {
+                    const data = await api({ action: "members" });
+                    host.replaceChildren();
+                    for (const person of data.members) {
+                        const card = document.createElement("label"), radio = document.createElement("input"), avatar = document.createElement("span"), details = document.createElement("span"), name = document.createElement("span"), online = document.createElement("div");
+                        const firstName = String(person.name || "Office member").trim().split(/\s+/)[0];
+                        card.className = "person";
+                        radio.type = "radio"; radio.name = "host"; radio.value = person.email; radio.required = true;
+                        avatar.className = "person-avatar"; avatar.textContent = firstName.charAt(0).toUpperCase();
+                        if (typeof person.avatar === "string" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(person.avatar)) {
+                            const img = document.createElement("img"); img.src = person.avatar; img.alt = "";
+                            img.onerror = () => { avatar.textContent = firstName.charAt(0).toUpperCase(); };
+                            avatar.replaceChildren(img);
+                        }
+                        name.className = "person-name"; name.textContent = firstName;
+                        online.className = "online"; online.textContent = "● In the office";
+                        details.append(name, online); card.append(radio, avatar, details); host.append(card);
+                    }
+                    send.disabled = !data.members.length;
+                    statusEl.textContent = data.members.length
+                        ? ""
+                        : "No one is available yet. Refresh this list in a moment.";
+                } catch (e) {
+                    statusEl.textContent = e.message;
+                }
+            }
+            form.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                send.disabled = true;
+                try {
+                    const visit = JSON.parse(sessionStorage.getItem("wa:guest-visit"));
+                    if (!visit) throw new Error("Entry session unavailable. Reopen the office.");
+                    await api({
+                        ...visit,
+                        action: "request",
+                        target: form.querySelector('input[name="host"]:checked').value,
+                        message: document.getElementById("message").value,
+                    });
+                    form.hidden = true;
+                    document.getElementById("refresh").hidden = true;
+                    statusEl.textContent = "Request sent. Waiting for your host to approve…";
+                } catch (e) {
+                    statusEl.textContent = e.message;
+                    send.disabled = false;
+                }
+            });
+            document.getElementById("refresh").addEventListener("click", members);
+            async function initialize() {
+                send.disabled = true;
+                try {
+                    const visit = JSON.parse(sessionStorage.getItem("wa:guest-visit"));
+                    if (!visit) throw new Error("Entry session unavailable. Reopen the office.");
+                    const state = await api({ ...visit, action: "status" });
+                    if (state.status !== "selecting") {
+                        form.hidden = true;
+                        document.getElementById("refresh").hidden = true;
+                        statusEl.textContent =
+                            state.status === "pending"
+                                ? "Request sent. Waiting for your host to approve…"
+                                : "Updating your entry status…";
+                        return;
+                    }
+                    await members();
+                } catch (error) {
+                    statusEl.textContent = error.message;
+                }
+            }
+            initialize();
+        </script>
+    </body>
+</html>

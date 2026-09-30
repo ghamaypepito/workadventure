@@ -7,80 +7,82 @@
 <body>
 <script>
 (function () {
-    function getCookie(name) {
-        const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-        return match ? decodeURIComponent(match[1]) : null;
-    }
-
-    function getUser() {
-        const raw = getCookie('wa_user');
-        if (!raw) return null;
-        try {
-            return JSON.parse(raw);
-        } catch {
-            return null;
-        }
-    }
-
     async function offerSeatPicker() {
         await WA.nav.openCoWebSite('/scripts/seat-picker.html', true, undefined, 40, 0, true);
     }
 
     let currentZone = null;
 
+    async function guestApi(body) {
+        const res = await fetch('/api/guests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Guest request failed');
+        return data;
+    }
+
     async function pollPendingAdmissions() {
-        let currentBanner = null;
+        const notified = new Set();
         const check = async () => {
             try {
-                const res = await fetch('/api/admission/pending');
-                if (res.ok) {
-                    const { requests } = await res.json();
-                    if (requests.length > 0 && !currentBanner) {
-                        const first = requests[0];
-                        currentBanner = WA.ui.openPopup(
-                            'admissionPendingPopup',
-                            (first.name || 'Someone') + ' wants to join the office.',
-                            [
-                                {
-                                    label: 'Let them in',
-                                    className: 'success',
-                                    callback: async () => {
-                                        await fetch('/api/admission/approve', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ requestId: first.requestId, room: currentZone }),
-                                        });
-                                        if (currentBanner) {
-                                            currentBanner.close();
-                                            currentBanner = null;
-                                        }
-                                    },
-                                },
-                            ],
-                        );
-                    } else if (requests.length === 0 && currentBanner) {
-                        currentBanner.close();
-                        currentBanner = null;
-                    }
+                const { visits } = await guestApi({ action: 'pending' });
+                if (visits.some(visit => !notified.has(visit.id))) {
+                    visits.forEach(visit => notified.add(visit.id));
+                    WA.ui.modal.openModal({ src: '/scripts/guest-requests.html', title: 'Guest entry requests', position: 'center', allowApi: true, closable: true });
                 }
-            } catch (e) {
-                console.error('[admission] pending poll error', e);
-            }
+                const active = new Set(visits.map(visit => visit.id));
+                for (const id of notified) if (!active.has(id)) notified.delete(id);
+            } catch (error) { console.error('[admission] pending requests unavailable', error); }
             setTimeout(check, 5000);
         };
         check();
     }
 
-    WA.onInit().then(async () => {
-        const user = getUser();
+    async function waitForGuestEntry() {
+        WA.controls.disablePlayerControls();
+        let visit;
+        try { visit = JSON.parse(sessionStorage.getItem('wa:guest-visit')); } catch { visit = null; }
+        if (!visit) visit = await guestApi({ action: 'begin', name: WA.player.name });
+        sessionStorage.setItem('wa:guest-visit', JSON.stringify(visit));
+        const initial = await guestApi({ ...visit, action: 'status' });
+        if (initial.status !== 'approved') WA.ui.modal.openModal({ src: '/scripts/guest-entry.html', title: 'Request entry', position: 'center', allowApi: false, closable: false });
+        let nextState = initial;
+        let admitted = initial.status === 'approved';
+        if (admitted) WA.controls.restorePlayerControls();
+        const check = async () => {
+            try {
+                const state = nextState || await guestApi({ ...visit, action: 'status' });
+                nextState = null;
+                if (['removed', 'declined', 'expired'].includes(state.status)) {
+                    sessionStorage.removeItem('wa:guest-visit');
+                    WA.controls.disablePlayerControls();
+                    WA.nav.goToPage('/guest-removed.html');
+                    return;
+                }
+                if (state.status === 'approved' && !admitted) {
+                    WA.ui.modal.closeModal();
+                    WA.controls.restorePlayerControls();
+                    admitted = true;
+                }
+            } catch (error) { console.error('[admission] visit check failed', error); }
+            setTimeout(check, 3000);
+        };
+        check();
+    }
 
-        if (!user) {
-            // Guest: no SSO session. Admission gating removed - guests enter the map directly,
-            // same as recognized users, with no picker/wait step. Everything below this point
-            // (identity registration, zone tracking, room persistence, pollPendingAdmissions)
-            // assumes a signed-in session, so it stays skipped for guests.
+    WA.onInit().then(async () => {
+        // Verify the signed session rather than trusting the editable display cookie.
+        WA.controls.disablePlayerControls();
+        const response = await fetch('/api/auth/session-status');
+        if (!response.ok) throw new Error('Unable to check office session');
+        const session = await response.json();
+        if (!session.authenticated) {
+            const access = await guestApi({ action: 'access', room: WA.room.id });
+            if (!access.enabled) { WA.controls.restorePlayerControls(); return; }
+            await waitForGuestEntry();
             return;
         }
+        const user = session.user;
+        WA.controls.restorePlayerControls();
 
         // Register this session's WA player uuid -> SSO email, so chat history (keyed by uuid on
         // the client) can be resolved to the account's email server-side. This is what makes chat
@@ -127,14 +129,16 @@
 
         // Keep this user's presence fresh in the known-members list (see PRESENCE_TTL_SECONDS
         // in api/_lib/presence.js — must heartbeat more often than that TTL).
-        setInterval(() => {
-            fetch('/api/admission/heartbeat', { method: 'POST' }).catch((e) =>
-                console.error('[admission] heartbeat failed', e),
-            );
-        }, 20000);
-        fetch('/api/admission/heartbeat', { method: 'POST' }).catch((e) =>
-            console.error('[admission] initial heartbeat failed', e),
-        );
+        let avatar = null;
+        WA.player.getWokaPicture().then((picture) => { avatar = picture; }).catch((e) => console.error('[admission] avatar unavailable', e));
+        function sendHeartbeat() {
+            fetch('/api/admission/heartbeat', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: WA.player.name, avatar }),
+            }).catch((e) => console.error('[admission] heartbeat failed', e));
+        }
+        setInterval(sendHeartbeat, 20000);
+        sendHeartbeat();
 
         // Persist the current zone on the way out, so it can be restored next login.
         window.addEventListener('beforeunload', () => {
@@ -182,6 +186,9 @@
         // targeted at them, per the pending() filter in api/admission/[...admissionPath].js).
         // Run this unconditionally regardless of which branch above ran or whether it errored.
         pollPendingAdmissions();
+    }).catch(error => {
+        console.error('[admission] unable to initialize entry', error);
+        WA.nav.goToPage('/guest-removed.html?reason=unavailable');
     });
 })();
 </script>

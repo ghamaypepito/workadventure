@@ -29,6 +29,7 @@ export type SpaceName = string;
 export type ConnectingSocketData = {
     rejected: false;
     token: string;
+    guestAccess?: string;
     roomId: string;
     userId?: number; // User Id served by the back
     userUuid: string; // Admin UUID

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Visit ended · ConnectiumAI Office</title>
+        <style>
+            body {
+                background: #0f172a;
+                color: #e2e8f0;
+                font: 18px system-ui;
+                max-width: 520px;
+                margin: 15vh auto;
+                padding: 24px;
+            }
+            a {
+                color: #a5b4fc;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Your visit has ended</h1>
+        <p>
+            Your entry request was declined, expired, or your visit was ended by an administrator. You can request entry
+            again.
+        </p>
+        <a href="/~/virtual-workplace/map.wam">Request entry again</a>
+        <script>
+            if (new URLSearchParams(location.search).get("reason") === "unavailable") {
+                document.querySelector("h1").textContent = "Entry is temporarily unavailable";
+                document.querySelector("p").textContent =
+                    "We could not check your office session. Please try again in a moment.";
+            }
+        </script>
+    </body>
+</html>

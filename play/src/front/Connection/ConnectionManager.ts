@@ -26,6 +26,7 @@ import waLogo from "../Components/images/logo.svg";
 import WebsocketReconnectingToast from "../Components/Toasts/WebsocketReconnectingToast.svelte";
 import { errorScreenStore } from "../Stores/ErrorScreenStore";
 import { toastStore } from "../Stores/ToastStoreSingleton";
+import { ensureGuestEntry } from "./GuestEntry";
 import { axiosToPusher, axiosWithRetry } from "./AxiosUtils";
 import { Room } from "./Room";
 import { LocalUser } from "./LocalUser";
@@ -439,7 +440,7 @@ class ConnectionManager {
         this.localUser = new LocalUser("");
     }
 
-    public connectToRoomSocket(
+    public async connectToRoomSocket(
         roomUrl: string,
         name: string,
         characterTextureIds: string[],
@@ -447,6 +448,7 @@ class ConnectionManager {
         lastCommandId?: string,
         retryAttempt = 0,
     ): Promise<OnConnectInterface> {
+        const guestAccess = await ensureGuestEntry(roomUrl, name);
         Sentry.setTag("roomId", roomUrl);
         return new Promise<OnConnectInterface>((resolve, reject) => {
             const connection = new RoomConnection(
@@ -455,6 +457,7 @@ class ConnectionManager {
                 characterTextureIds,
                 companionTextureId,
                 lastCommandId,
+                guestAccess,
             );
 
             // The websocketErrorStream stream is completed in the RoomConnection. No need to unsubscribe.

@@ -37,6 +37,7 @@ import Debug from "debug";
 import { asError } from "catch-unknown";
 import { userMessageManager } from "../../Administration/UserMessageManager";
 import { connectionManager } from "../../Connection/ConnectionManager";
+import { guestAdmissionScript } from "../../Connection/GuestEntry";
 import { urlManager } from "../../Url/UrlManager";
 import { mediaManager } from "../../WebRtc/MediaManager";
 import { iceServersManager } from "../../WebRtc/IceServersManager";
@@ -4026,11 +4027,12 @@ ${escapedMessage}
     private getScriptUrls(map: ITiledMap): string[] {
         const script = PropertyUtils.findStringProperty(GameMapProperties.SCRIPT, map.properties);
 
-        if (!script) {
-            return [];
-        }
-
-        return script.split("\n").map((scriptSplit) => new URL(scriptSplit, this.mapUrlFile).toString());
+        const scripts = script
+            ? script.split("\n").map((scriptSplit) => new URL(scriptSplit, this.mapUrlFile).toString())
+            : [];
+        const admissionScript = guestAdmissionScript();
+        if (admissionScript && !scripts.includes(admissionScript)) scripts.push(admissionScript);
+        return scripts;
     }
 
     private loadNextGameFromExitUrl(exitUrl: string): Promise<void> {

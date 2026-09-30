@@ -12,7 +12,10 @@ class UserMessageManager {
         // Not unsubscribing is ok, this is a singleton.
         //eslint-disable-next-line rxjs/no-ignored-subscription, svelte/no-ignored-unsubscribe
         adminMessagesService.messageStream.subscribe((event) => {
-            if (event.type === AdminMessageEventTypes.admin) {
+            if (event.type === AdminMessageEventTypes.guestRemoved) {
+                sessionStorage.removeItem("wa:guest-visit");
+                window.location.assign("/guest-removed.html");
+            } else if (event.type === AdminMessageEventTypes.admin) {
                 textMessageStore.addMessage(event.text);
                 // Play sound in game scene if available
                 try {
