@@ -57,6 +57,8 @@
           ).toString()
         : undefined;
 
+    const isGuestNotification = modalUrl !== undefined && new URL(modalUrl).pathname === "/scripts/guest-requests.html";
+
     let isMobile = $state(isMediaBreakpointUp("md"));
     const resizeObserver = new ResizeObserver(() => {
         isMobile = isMediaBreakpointUp("md");
@@ -65,16 +67,25 @@
 
 <svelte:window onkeydown={onKeyDown} />
 
+{#if isGuestNotification && $modalIframeStore?.closable !== false}
+    <button
+        class="fixed inset-0 z-[1999] pointer-events-auto border-0 bg-transparent"
+        aria-label="Dismiss guest notification"
+        tabindex="-1"
+        onclick={close}
+    ></button>
+{/if}
+
 <div
     class="menu-container fixed h-dvh w-dvw z-[2000] pointer-events-auto top-0 transition-all {isMobile
         ? 'mobile'
         : $modalIframeStore?.position} {isFullScreened ? 'fullscreened' : ''}"
-    class:guest-entry-notification={modalUrl !== undefined &&
-        new URL(modalUrl).pathname === "/scripts/guest-requests.html"}
+    class:guest-entry-notification={isGuestNotification}
     bind:this={mainModal}
 >
     <div class="w-full h-full bg-contrast/80 backdrop-blur rounded" transition:blur={{ amount: 10, duration: 250 }}>
         <div
+            class:guest-notification-actions={isGuestNotification}
             class={`flex justify-center items-center content-center bg-contrast/80 backdrop-blur p-2 space-y-0 @lg/main-layout:space-y-2 rounded-lg absolute z-50 hover:opacity-100 opacity-25 transition-opacity duration-300
                 ${
                     isFullScreened || isMobile
@@ -109,6 +120,7 @@
                     }}
                     class="btn btn-danger rounded m-0"
                     style={isFullScreened == true ? "" : "margin: 0px;"}
+                    aria-label="Close popup"
                     data-testid="close-modal-button"
                 >
                     <IconX font-size="20" class="text-white" />
@@ -133,6 +145,14 @@
 </div>
 
 <style>
+    .guest-notification-actions {
+        top: 8px !important;
+        right: 8px !important;
+        left: auto !important;
+        padding: 0 !important;
+        opacity: 1 !important;
+        background: transparent !important;
+    }
     .menu-container.guest-entry-notification {
         width: min(520px, calc(100vw - 48px)) !important;
         height: min(440px, calc(100dvh - 80px)) !important;
