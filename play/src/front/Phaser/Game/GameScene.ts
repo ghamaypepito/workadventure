@@ -37,6 +37,7 @@ import Debug from "debug";
 import { asError } from "catch-unknown";
 import { userMessageManager } from "../../Administration/UserMessageManager";
 import { connectionManager } from "../../Connection/ConnectionManager";
+import { loadGuestAdmissionScript } from "../../Connection/GuestEntry";
 import { urlManager } from "../../Url/UrlManager";
 import { mediaManager } from "../../WebRtc/MediaManager";
 import { iceServersManager } from "../../WebRtc/IceServersManager";
@@ -904,7 +905,13 @@ export class GameScene extends DirtyScene {
             GameMapProperties.SCRIPT_DISABLE_MODULE_SUPPORT,
             this.mapFile.properties,
         );
-        const scriptPromises = [];
+        const scriptPromises = this._room.isDisconnected()
+            ? []
+            : [
+                  loadGuestAdmissionScript(this.connectionAnswerPromiseDeferred.promise, scripts, (url) =>
+                      iframeListener.registerScript(url),
+                  ),
+              ];
         for (const script of scripts) {
             scriptPromises.push(
                 // Note: registerScript fails after 7 seconds if the script cannot be loaded
@@ -4026,11 +4033,10 @@ ${escapedMessage}
     private getScriptUrls(map: ITiledMap): string[] {
         const script = PropertyUtils.findStringProperty(GameMapProperties.SCRIPT, map.properties);
 
-        if (!script) {
-            return [];
-        }
-
-        return script.split("\n").map((scriptSplit) => new URL(scriptSplit, this.mapUrlFile).toString());
+        const scripts = script
+            ? script.split("\n").map((scriptSplit) => new URL(scriptSplit, this.mapUrlFile).toString())
+            : [];
+        return scripts;
     }
 
     private loadNextGameFromExitUrl(exitUrl: string): Promise<void> {

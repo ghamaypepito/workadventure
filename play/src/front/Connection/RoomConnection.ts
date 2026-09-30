@@ -296,12 +296,14 @@ export class RoomConnection implements RoomConnection {
         characterTextureIds: string[],
         companionTextureId: string | null,
         lastCommandId?: string,
+        guestAccess?: string,
     ) {
         const urlObj = new URL("ws/room", ABSOLUTE_PUSHER_URL);
         urlObj.protocol = urlObj.protocol.replace("http", "ws");
 
         const params = urlObj.searchParams;
         params.set("roomId", roomUrl);
+        if (guestAccess) params.set("guestAccess", guestAccess);
         for (const textureId of characterTextureIds) {
             params.append("characterTextureIds", textureId);
         }

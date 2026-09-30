@@ -80,6 +80,7 @@ import type { Admin } from "../Model/Admin";
 import { Space } from "../Model/Space";
 import type { SpacesWatcher } from "../Model/SpacesWatcher";
 import { eventProcessor } from "../Model/EventProcessorInit";
+import { selectSocialSignalTargets } from "./SocialSignalTarget";
 import { gaugeManager } from "./GaugeManager";
 import { clientEventsEmitter } from "./ClientEventsEmitter";
 import { getMapStorageClient } from "./MapStorageClient";
@@ -1402,8 +1403,12 @@ export class SocketManager {
         if (!isAdmin) {
             room.logMeetingInvitationRequest(sender.uuid, message.receiverUserUuid);
         }
-        const targets = room.getUsersByUuid(message.receiverUserUuid);
-        if (targets.size === 0) {
+        const targets = selectSocialSignalTargets(
+            room.getUsersByUuid(message.receiverUserUuid),
+            message.receiverUserUuid,
+            message.receiverUserId,
+        );
+        if (targets.length === 0) {
             return;
         }
         for (const target of targets) {

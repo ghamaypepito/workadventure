@@ -49,6 +49,7 @@
   </div>
 </div>
 
+<div class="section"><h2>Guests in the office</h2><p>Removing a guest ends this visit. They can request entry again.</p><div id="guest-list" aria-live="polite"></div><button id="refresh-guests">Refresh guests</button></div>
 <div id="error" class="error"></div>
 
 <script>
@@ -160,6 +161,31 @@ function promote() {
   document.getElementById('promote-email').value = '';
 }
 
+async function loadGuests() {
+  const list = document.getElementById('guest-list');
+  try {
+    const { visits } = await api('/api/guests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'list' }) });
+    list.replaceChildren();
+    if (!visits.length) list.textContent = 'No active guest visits.';
+    for (const visit of visits) {
+      const row = document.createElement('div'); row.className = 'row';
+      const name = document.createElement('span'); name.textContent = visit.name + ' · ' + visit.id.slice(0, 8);
+      const button = document.createElement('button'); button.className = 'remove'; button.textContent = 'Remove from map';
+      button.addEventListener('click', async () => {
+        if (!confirm('End ' + visit.name + "’s visit? They can request entry again.")) return;
+        button.disabled = true;
+        try {
+          await api('/api/guests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'remove', id: visit.id }) });
+          await loadGuests();
+        } catch (error) { showError(error); button.disabled = false; }
+      });
+      row.append(name, button); list.append(row);
+    }
+  } catch (error) { list.textContent = 'Unable to load guests. Try refreshing.'; showError(error); }
+}
+document.getElementById('refresh-guests').addEventListener('click', loadGuests);
+setInterval(() => { if (!document.hidden) loadGuests(); }, 10000);
+loadGuests();
 load();
 </script>
 </body>

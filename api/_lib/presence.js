@@ -14,9 +14,11 @@ function lastRoomKey(email) {
 }
 
 // Called periodically by an online recognized user's client to keep them "Active now".
-async function heartbeat(email) {
+async function heartbeat(email, profile = {}) {
     return withRedis(REDIS_URL, async (client) => {
-        await client.command('SET', presenceKey(email), '1', 'EX', String(PRESENCE_TTL_SECONDS));
+        const name = typeof profile.name === 'string' ? profile.name.trim().slice(0, 80) : '';
+        const avatar = typeof profile.avatar === 'string' && profile.avatar.length <= 100000 && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(profile.avatar) ? profile.avatar : null;
+        await client.command('SET', presenceKey(email), JSON.stringify({ name, avatar }), 'EX', String(PRESENCE_TTL_SECONDS));
     });
 }
 
@@ -29,8 +31,10 @@ async function listKnownMembers() {
         const emails = Array.from(new Set([...(admins || []), ...(approved || [])]));
         const members = [];
         for (const email of emails) {
-            const online = (await client.command('GET', presenceKey(email))) !== null;
-            members.push({ email, online });
+            const raw = await client.command('GET', presenceKey(email));
+            let profile = {};
+            try { const parsed = JSON.parse(raw); if (parsed && typeof parsed === 'object') profile = parsed; } catch {}
+            members.push({ email, online: raw !== null, name: profile.name || email.split('@')[0].split(/[._-]/)[0], avatar: profile.avatar || null });
         }
         return members;
     });
