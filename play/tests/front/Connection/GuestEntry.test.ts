@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ensureGuestEntry, guestAdmissionScript } from "../../../src/front/Connection/GuestEntry";
+import {
+    ensureGuestEntry,
+    guestAdmissionScript,
+    loadGuestAdmissionScript,
+} from "../../../src/front/Connection/GuestEntry";
 afterEach(() => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -7,6 +11,29 @@ afterEach(() => {
     document.body.replaceChildren();
 });
 describe("entry before map connection", () => {
+    it("loads host presence when scene startup precedes the admission check", async () => {
+        let connected!: () => void;
+        const ready = new Promise<void>((resolve) => {
+            connected = resolve;
+        });
+        const register = vi.fn().mockResolvedValue(undefined);
+        const loaded = loadGuestAdmissionScript(ready, [], register);
+        await Promise.resolve();
+        expect(register).not.toHaveBeenCalled();
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({ enabled: true, member: true, pass: "member-pass" }),
+            }),
+        );
+        await ensureGuestEntry("https://office.example/map", "Member");
+        connected();
+        await loaded;
+        expect(register).toHaveBeenCalledExactlyOnceWith(guestAdmissionScript());
+        await loadGuestAdmissionScript(ready, [guestAdmissionScript()!], register);
+        expect(register).toHaveBeenCalledTimes(1);
+    });
     it("does not prompt signed-in members", async () => {
         vi.stubGlobal(
             "fetch",

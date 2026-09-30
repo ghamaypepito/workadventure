@@ -3,6 +3,17 @@ let admissionEnabled = false;
 export function guestAdmissionScript(): string | undefined {
     return admissionEnabled ? new URL("/scripts/admission-script.html", window.location.origin).toString() : undefined;
 }
+// Scene scripts are selected before connectToRoomSocket checks admission settings.
+// Wait for that connection before deciding whether the host presence script is needed.
+export async function loadGuestAdmissionScript(
+    connectionReady: Promise<void>,
+    mapScripts: string[],
+    registerScript: (url: string) => Promise<void>,
+): Promise<void> {
+    await connectionReady;
+    const script = guestAdmissionScript();
+    if (script && !mapScripts.includes(script)) await registerScript(script);
+}
 const accessSchema = z.object({ enabled: z.boolean(), member: z.boolean().optional(), pass: z.string().optional() });
 const visitSchema = z.object({ id: z.string(), token: z.string() });
 const stateSchema = z.object({ status: z.string() });
